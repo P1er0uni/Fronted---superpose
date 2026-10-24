@@ -8,7 +8,36 @@ El backend se implementará con Qiskit y será responsable de formular el proble
 
 La idea central del sistema es optimizar la asignación de toda la red, no calcular de forma aislada la ruta más corta de cada conductor.
 
-Configura la URL base en `.env.local`:
+## Compatibilidad con `superpose-api`
+
+El backend elegido encaja con el concepto de Qflow: compara enrutamiento egoísta con asignación conjunta QAOA, trabaja con incidentes y devuelve telemetría cuántica. Sin embargo, su contrato actual no coincide directamente con el contrato visual descrito más abajo. La integración debe incorporar un adaptador en el frontend.
+
+Base local del backend:
+
+```env
+VITE_SIMULATION_API_URL=http://localhost:8000
+```
+
+Correspondencia prevista:
+
+| Qflow | `superpose-api` | Adaptación necesaria |
+|---|---|---|
+| Crear escenario | `GET /api/v1/topology` + `POST /api/v1/route/optimize` | Convertir nodos y aristas en el mapa SVG. |
+| Rutas coordinadas | `flows[].qaoa_route` | Sustituir IDs de nodo por coordenadas y construir polilíneas. |
+| Comparación individual | `flows[].selfish_route` y `comparison` | Mostrar la alternativa clásica y sus métricas. |
+| Incidente | `POST /api/v1/events/report` | Reportar el evento y volver a ejecutar `/route/optimize`. |
+| Métricas del solver | `quantum_telemetry` y `total_time_ms` | Separar tiempo QAOA de latencia HTTP. |
+| Autos animados | `flows[].vehicles` | Expandir visualmente cada flujo sobre su ruta; el navegador solo anima. |
+
+La vista previa actual replica la topología exacta de `app/config.py`: `NODO_A` a `NODO_F` y sus 8 aristas configuradas, con sus tiempos base y capacidades. Como el backend no entrega coordenadas geográficas, el frontend asigna únicamente la posición y curvatura visual de cada arista. No inventa calles, nodos ni rotondas; una ruta solo puede recorrer conexiones presentes en esa configuración.
+
+La diferencia conceptual importante es que `superpose-api` optimiza exactamente **3 flujos con 2 rutas candidatas cada uno**, lo que produce un QUBO de 6 variables/qubits. Los 20 autos de la demostración no deben presentarse como 20 decisiones cuánticas independientes: son la representación visual de vehículos agrupados dentro de esos flujos. Esta escala es adecuada para la primera demo y mantiene visible el aporte cuántico sin inflar el problema.
+
+El solver actual usa QAOA sobre `qiskit-aer` y puede recurrir a `NumPyMinimumEigensolver`. Para afirmar que la ejecución ocurrió en hardware de IBM será necesario añadir una configuración de IBM Quantum Runtime y devolver el proveedor real en la telemetría. Mientras tanto, la interfaz debe rotular la ejecución como simulada.
+
+Los endpoints que aparecen a continuación documentan el contrato visual original. Se conservarán como modelo interno de la interfaz hasta que el adaptador traduzca las respuestas de `superpose-api`.
+
+Para el contrato visual original descrito debajo, la URL base se configuraba así:
 
 ```env
 VITE_SIMULATION_API_URL=http://localhost:8080/api
@@ -79,9 +108,9 @@ Respuesta:
     "execution": "quantum_simulator",
     "mode": "QUBO híbrido",
     "problem": {
-      "binaryVariables": 60,
-      "constraints": 26,
-      "candidateRoutes": 60
+      "binaryVariables": 6,
+      "constraints": 3,
+      "candidateRoutes": 6
     },
     "stages": [
       { "id": "encode", "label": "Formular QUBO", "durationMs": 8.4 },

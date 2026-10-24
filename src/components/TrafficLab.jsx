@@ -85,19 +85,15 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
   }
 
   const nodes = new Map(map.nodes.map((node) => [node.id, node]))
+  const originIds = new Set((session.flows || []).map((flow) => flow.originId))
+  const destinationIds = new Set((session.flows || []).map((flow) => flow.destinationId))
   const selectedGeometry = pointsForRoad(map.roads.find((road) => road.id === selectedRoad) || {}, nodes)
   const selectedMidpoint = selectedGeometry[Math.floor(selectedGeometry.length / 2)]
 
   return (
     <div className="traffic-map">
       <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Mapa de la simulación de tráfico">
-        <defs>
-          <pattern id="city-blocks" width="42" height="42" patternUnits="userSpaceOnUse">
-            <rect width="42" height="42" fill="#17222c" />
-            <path d="M0 42H42M42 0V42" stroke="#243745" strokeWidth="1" />
-          </pattern>
-        </defs>
-        <rect width={width} height={height} fill="url(#city-blocks)" />
+        <rect width={width} height={height} fill="#14202a" />
 
         <g className="traffic-map__areas">
           {(map.areas || []).map((area) => <path key={area.id} className={`city-area city-area--${area.kind}`} d={pathFromPoints(area.points, true)} />)}
@@ -111,6 +107,8 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
             const isIncident = road.id === incident?.roadId
             return (
               <g key={road.id}>
+                <title>{`${road.label || road.id} · ${road.baseTime ?? '—'} min · capacidad ${road.capacity ?? '—'}`}</title>
+                <path className={`traffic-road__edge traffic-road__edge--${road.kind || 'secondary'}`} d={pathFromPoints(points, road.closed)} />
                 <path className={`traffic-road traffic-road--${road.kind || 'secondary'}${isSelected ? ' traffic-road--selected' : ''}${isIncident ? ' traffic-road--incident' : ''}`} d={pathFromPoints(points, road.closed)} />
                 <path
                   className={`traffic-road__hit${roadsInteractive ? '' : ' traffic-road__hit--disabled'}`}
@@ -129,12 +127,49 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
         </g>
 
         <g className="traffic-map__routes">
-          {(session.routes || []).map((route) => (
-            <path key={route.id} d={pathFromPoints(route.points)} style={{ '--route-color': route.color }} />
-          ))}
+          {(session.routes || []).map((route, index) => {
+            const badgePoint = route.points?.[Math.max(1, Math.floor((route.points.length - 1) / 2))]
+            const label = route.label || `R${index + 1}`
+            return (
+              <g
+                key={route.id}
+                className="traffic-route"
+                style={{
+                  '--route-color': route.color,
+                  '--route-dash': index === 0 ? 'none' : (index === 1 ? '18 7' : '7 6'),
+                  '--route-offset': index * -4,
+                }}
+                aria-label={`${label}: ${route.id}`}
+              >
+                <path className="traffic-route__casing" d={pathFromPoints(route.points)} />
+                <path className="traffic-route__line" d={pathFromPoints(route.points)} />
+                {badgePoint && (
+                  <g className="traffic-route__badge" transform={`translate(${badgePoint[0]} ${badgePoint[1]})`}>
+                    <rect x="-19" y="-11" width="38" height="22" rx="5" />
+                    <text textAnchor="middle" dominantBaseline="central">{label}</text>
+                  </g>
+                )}
+              </g>
+            )
+          })}
+        </g>
+
+        <g className="traffic-map__markings" aria-hidden="true">
+          {map.roads.map((road) => {
+            const points = pointsForRoad(road, nodes)
+            return points.length
+              ? <path key={road.id} className={`traffic-road__lane traffic-road__lane--${road.kind || 'secondary'}`} d={pathFromPoints(points, road.closed)} />
+              : null
+          })}
         </g>
 
         <g className="traffic-map__labels" aria-hidden="true">
+          {map.roads.map((road) => road.labelAt && (
+            <g className="traffic-road-label" key={`${road.id}-label`} transform={`translate(${road.labelAt[0]} ${road.labelAt[1]})`}>
+              <rect x="-28" y="-10" width="56" height="20" rx="4" />
+              <text textAnchor="middle" dominantBaseline="central">{road.baseTime} min</text>
+            </g>
+          ))}
           {(map.labels || []).map((label) => <text key={`${label.text}-${label.x}`} className={`city-label city-label--${label.kind}`} x={label.x} y={label.y}>{label.text}</text>)}
           {(map.badges || []).map((badge) => (
             <g key={badge.text} transform={`translate(${badge.x} ${badge.y})`}>
@@ -145,11 +180,23 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
         </g>
 
         <g className="traffic-map__nodes">
-          {map.nodes.map((node) => (
-            node.kind === 'origin' || node.kind === 'destination'
-              ? <circle key={node.id} cx={node.x} cy={node.y} r="11" className={`traffic-node traffic-node--${node.kind}`} />
-              : null
-          ))}
+          {map.nodes.map((node) => {
+            const isOrigin = originIds.has(node.id)
+            const isDestination = destinationIds.has(node.id)
+            const role = isOrigin && isDestination ? 'Origen · destino' : (isOrigin ? 'Origen' : (isDestination ? 'Destino' : 'Conexión'))
+            return (
+              <g
+                key={node.id}
+                className={`traffic-node${isOrigin ? ' traffic-node--origin' : ''}${isDestination ? ' traffic-node--destination' : ''}`}
+                transform={`translate(${node.x} ${node.y})`}
+              >
+                <title>{`${node.id} · ${role}`}</title>
+                <circle r="16" />
+                <text className="traffic-node__id" textAnchor="middle" dominantBaseline="central">{node.label || node.id.replace('NODO_', '')}</text>
+                <text className="traffic-node__role" x="0" y="31" textAnchor="middle">{role}</text>
+              </g>
+            )
+          })}
         </g>
 
         {selectedMidpoint && incident && (
@@ -176,17 +223,30 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
                   if (event.key === 'Enter' || event.key === ' ') onSelectVehicle(vehicle.id)
                 }}
               >
-                <circle className="traffic-vehicle__halo" r="11" />
-                <path className="traffic-vehicle" d="M0-9 7 8 0 5-7 8Z" style={{ '--vehicle-color': vehicle.color || `var(--vehicle-${(index % 4) + 1})` }} />
+                <title>{`${vehicle.id}${vehicle.routeId ? ` · ${vehicle.routeId}` : ''}`}</title>
+                <circle className="traffic-vehicle__halo" r="14" />
+                <g className="traffic-vehicle" style={{ '--vehicle-color': vehicle.color || `var(--vehicle-${(index % 4) + 1})` }}>
+                  <rect className="traffic-vehicle__wheel" x="-8" y="-7" width="3" height="6" rx="1" />
+                  <rect className="traffic-vehicle__wheel" x="5" y="-7" width="3" height="6" rx="1" />
+                  <rect className="traffic-vehicle__wheel" x="-8" y="4" width="3" height="6" rx="1" />
+                  <rect className="traffic-vehicle__wheel" x="5" y="4" width="3" height="6" rx="1" />
+                  <path className="traffic-vehicle__body" d="M-5-11Q0-13 5-11L7-5V8Q7 11 4 12H-4Q-7 11-7 8V-5Z" />
+                  <path className="traffic-vehicle__glass" d="M-4-5 4-5 5-1H-5ZM-5 2H5L4 7H-4Z" />
+                  <path className="traffic-vehicle__roof" d="M-4-6Q0-8 4-6L5 7Q0 9-5 7Z" />
+                  <circle className="traffic-vehicle__light" cx="-3.5" cy="-9.5" r="1.1" />
+                  <circle className="traffic-vehicle__light" cx="3.5" cy="-9.5" r="1.1" />
+                </g>
               </g>
             )
           })}
         </g>
       </svg>
+      <div className="traffic-map__source">Topología del backend · 6 nodos · 8 vías</div>
       <div className="traffic-map__key" aria-hidden="true">
         <span><i className="key-origin" />Origen</span>
         <span><i className="key-destination" />Destino</span>
-        <span><i className="key-vehicle" />Vehículo</span>
+        <span><i className="key-route" />Ruta asignada</span>
+        <span><i className="key-vehicle" />Auto</span>
       </div>
     </div>
   )
@@ -337,7 +397,7 @@ export default function TrafficLab() {
           <span className={`connection-dot connection-dot--${status}`} />
           <div>
             <strong>{STATUS_LABELS[status]}</strong>
-            <span>{source === 'demo' ? 'Respuesta mock · contrato del backend' : API_BASE}</span>
+            <span>{source === 'demo' ? `${vehicleCount} autos visuales · 3 flujos · 6 variables` : API_BASE}</span>
           </div>
         </div>
 

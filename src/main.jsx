@@ -148,9 +148,9 @@ function App() {
             <article className="method__step reveal">
               <p><strong>Primero, la ciudad se convierte en decisiones.</strong> Intersecciones, vías, tiempos y capacidad forman un modelo donde cada vehículo conserva su origen y destino.</p>
               <div className="evidence" data-ui>
-                <div><span>Red activa</span><strong>128 nodos</strong></div>
-                <div><span>Conexiones</span><strong>412</strong></div>
-                <div><span>Ventana de cálculo</span><strong>30 s</strong></div>
+                <div><span>Red activa</span><strong>6 nodos</strong></div>
+                <div><span>Conexiones</span><strong>8 vías</strong></div>
+                <div><span>Decisiones QUBO</span><strong>6 binarias</strong></div>
               </div>
             </article>
             <article className="method__step reveal">
@@ -162,8 +162,8 @@ function App() {
             <article className="method__step reveal">
               <p><strong>Cuando algo cambia, cambia el conjunto.</strong> Un reporte reduce la capacidad de una vía y dispara un nuevo cálculo para los vehículos afectados.</p>
               <div className="event-row" data-ui>
-                <div><span>Av. Central</span><strong>Capacidad reducida</strong></div>
-                <div><span>Vehículos afectados</span><strong>3 rutas por revisar</strong></div>
+                <div><span>Vía central C–D</span><strong>Accidente reportado</strong></div>
+                <div><span>Flujo afectado</span><strong>Usuario A → F</strong></div>
                 <button type="button" onClick={() => setIncident(true)}>Aplicar al mapa</button>
               </div>
             </article>

@@ -1,6 +1,10 @@
+export { applyMockIncident, createMockSession, MOCK_INCIDENTS } from './backendPreview'
+
+/* Legacy mock retained temporarily for reference while the API adapter is implemented.
 import { DEMO_MAP } from './demoScenario'
 
 const palette = ['#73d5ff', '#9ee493', '#ffd166', '#ff8f70']
+const flowPalette = { norte: palette[0], centro: palette[2], sur: palette[1] }
 
 const flows = [
   { id: 'norte', originId: 'origin-north', destinationId: 'destination-north', label: 'Distrito Norte → Terminal Norte' },
@@ -51,6 +55,13 @@ const routesByScenario = {
   ],
 }
 
+const selectedNormalRoutes = [normalRoutes[0], normalRoutes[2], normalRoutes[4]]
+const selectedRoutesByScenario = {
+  'accident-metropolitana': [routesByScenario['accident-metropolitana'][1], routesByScenario['accident-metropolitana'][3], routesByScenario['accident-metropolitana'][5]],
+  'closure-central': [routesByScenario['closure-central'][0], routesByScenario['closure-central'][2], routesByScenario['closure-central'][4]],
+  'demand-centre': [routesByScenario['demand-centre'][0], routesByScenario['demand-centre'][3], routesByScenario['demand-centre'][4]],
+}
+
 export const MOCK_INCIDENTS = [
   {
     id: 'accident-metropolitana', label: 'Accidente · Vía Metropolitana', roadId: 'via-metropolitana', roadLabel: 'Vía Metropolitana', type: 'accident',
@@ -73,7 +84,7 @@ export const MOCK_INCIDENTS = [
 ]
 
 function normaliseRoutes(rows) {
-  return rows.map(([id, flowId, color, points]) => ({ id, flowId, color, points }))
+  return rows.map(([id, flowId, , points]) => ({ id, flowId, color: flowPalette[flowId], points }))
 }
 
 function timelineFor(points, index, duration) {
@@ -118,7 +129,7 @@ function solverPreview(vehicleCount, computeMs) {
   const decodeMs = Number((computeMs - encodeMs - solveMs).toFixed(1))
   return {
     framework: 'Qiskit', execution: 'simulated', mode: 'QUBO híbrido',
-    problem: { binaryVariables: vehicleCount * 3, constraints: vehicleCount + 6, candidateRoutes: vehicleCount * 3 },
+    problem: { binaryVariables: 6, constraints: 3, candidateRoutes: 6, visualVehicles: vehicleCount },
     stages: [
       { id: 'encode', label: 'Formular QUBO', durationMs: encodeMs },
       { id: 'solve', label: 'Resolver', durationMs: solveMs },
@@ -142,8 +153,8 @@ export function createMockSession(vehicleCount = 20) {
   const metrics = { computeMs: 82.4, reroutedVehicles: 0, averageTravelSeconds: 20.8, maxCongestionPct: 68 }
   return {
     sessionId: 'preview-qiskit-01', revision: 1, source: 'mock-backend', map, flows,
-    dataNotice: 'Respuesta simulada. Qiskit todavía no se ejecuta.',
-    routes: normaliseRoutes(normalRoutes), vehicles: vehiclesFor(normalRoutes, vehicleCount),
+    dataNotice: `Respuesta simulada: ${vehicleCount} autos visualizan 3 flujos agregados y 6 decisiones binarias.`,
+    routes: normaliseRoutes(selectedNormalRoutes), vehicles: vehiclesFor(selectedNormalRoutes, vehicleCount),
     solver: solverPreview(vehicleCount, metrics.computeMs),
     comparison: comparisonFor(metrics, { averageTravelSeconds: 24.6, maxCongestionPct: 86, lastArrivalSeconds: 34.2 }),
     metrics,
@@ -152,7 +163,7 @@ export function createMockSession(vehicleCount = 20) {
 
 export function applyMockIncident(currentSession, incident) {
   const scenario = MOCK_INCIDENTS.find((item) => item.id === incident.scenarioId) || MOCK_INCIDENTS[0]
-  const routeRows = routesByScenario[scenario.id]
+  const routeRows = selectedRoutesByScenario[scenario.id]
   const vehicleCount = currentSession.vehicles.length
   const metrics = { ...scenario.metrics, reroutedVehicles: Math.round(vehicleCount * scenario.reroutedShare) }
   return {
@@ -168,4 +179,6 @@ export function applyMockIncident(currentSession, incident) {
 }
 
 console.assert(flows.length === 3, 'La vista previa debe conservar tres flujos origen-destino.')
-console.assert(MOCK_INCIDENTS.every((scenario) => routesByScenario[scenario.id]?.length === 6), 'Cada incidente debe devolver seis rutas.')
+console.assert(MOCK_INCIDENTS.every((scenario) => routesByScenario[scenario.id]?.length === 6), 'Cada escenario debe conservar seis rutas candidatas.')
+console.assert(MOCK_INCIDENTS.every((scenario) => selectedRoutesByScenario[scenario.id]?.length === 3), 'Cada incidente debe mostrar tres rutas asignadas.')
+*/
