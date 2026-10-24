@@ -13,7 +13,7 @@ Vite mostrará la URL local, normalmente `http://localhost:5173`.
 
 ## Conectar el simulador
 
-El laboratorio incluye una vista previa jugable basada en un snapshot del backend y un modo conectado. Ninguno calcula rutas en el navegador. Para usar Superpose API, copia `.env.example` como `.env.local`, configura `VITE_SIMULATION_API_URL` y sigue la integración descrita en [`BACKEND_API.md`](./BACKEND_API.md).
+El laboratorio incluye una vista previa jugable basada en un snapshot del backend y un modo conectado. Ninguno calcula rutas en el navegador. Por defecto el modo conectado usa la API desplegada en `https://superpose-api.vercel.app`; para otro backend copia `.env.example` como `.env.local` y cambia `VITE_SIMULATION_API_URL`. La integración está descrita en [`BACKEND_API.md`](./BACKEND_API.md).
 
 El modo conectado consume directamente `POST /api/v1/events/reset`, `POST /api/v1/route/optimize` y `POST /api/v1/events/report`. La demo local reproduce un snapshot de la topología, las rutas y la telemetría documentadas por el backend, sin ejecutar el algoritmo en el navegador.
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { API_BASE, reportIncident, startSimulation } from '../api/superposeApi'
-import { applyMockIncident, createMockSession, MOCK_INCIDENTS } from '../data/mockBackend'
+import { API_BASE, reportIncident, startSimulation } from '../api/superposeApi.js'
+import { applyMockIncident, createMockSession, MOCK_INCIDENTS } from '../data/backendSnapshot.js'
 
 const INCIDENTS = [
   { value: 'ACCIDENT', label: 'Accidente' },
@@ -58,6 +58,48 @@ function pointAt(timeline = [], elapsedMs = 0) {
   return { ...last, angle: Math.atan2(last.y - previous.y, last.x - previous.x) * (180 / Math.PI) }
 }
 
+// Keeps a vehicle where it is when its route is recalculated: it joins the new
+// route at the closest point and keeps the same pace from there.
+function continueTimeline(previousTimeline = [], nextTimeline = [], atMs = 0) {
+  if (!previousTimeline.length || !nextTimeline.length) return nextTimeline
+  if (atMs <= previousTimeline[0].atMs) return nextTimeline
+  const current = pointAt(previousTimeline, atMs)
+  if (atMs >= previousTimeline.at(-1).atMs) return [{ x: current.x, y: current.y, atMs: 0 }]
+
+  const closest = nextTimeline.reduce((best, point, index) => {
+    const distance = Math.hypot(point.x - current.x, point.y - current.y)
+    return distance < best.distance ? { index, distance } : best
+  }, { index: 0, distance: Infinity }).index
+  const shift = atMs - nextTimeline[closest].atMs
+  return [
+    { x: current.x, y: current.y, atMs: 0 },
+    { x: current.x, y: current.y, atMs },
+    ...nextTimeline.slice(closest + 1).map((point) => ({ ...point, atMs: point.atMs + shift })),
+  ]
+}
+
+function continueVehicles(previousVehicles = [], nextVehicles = [], atMs = 0) {
+  const previousById = new Map(previousVehicles.map((vehicle) => [vehicle.id, vehicle]))
+  return nextVehicles.map((vehicle) => {
+    const previous = previousById.get(vehicle.id)
+    return previous?.flowId === vehicle.flowId
+      ? { ...vehicle, timeline: continueTimeline(previous.timeline, vehicle.timeline, atMs) }
+      : vehicle
+  })
+}
+
+function continueSession(previousSession, nextSession, atMs) {
+  const strategyViews = Object.fromEntries(Object.entries(nextSession.strategyViews || {}).map(([key, view]) => [
+    key,
+    { ...view, vehicles: continueVehicles(previousSession?.strategyViews?.[key]?.vehicles, view.vehicles, atMs) },
+  ]))
+  return {
+    ...nextSession,
+    vehicles: continueVehicles(previousSession?.vehicles, nextSession.vehicles, atMs),
+    strategyViews,
+  }
+}
+
 function pointsForRoad(road, nodes) {
   if (road.geometry?.length) return road.geometry
   const from = nodes.get(road.from)
@@ -70,11 +112,62 @@ function pathFromPoints(points = [], closed = false) {
   return `${points.map(([x, y], index) => `${index ? 'L' : 'M'}${x} ${y}`).join(' ')}${closed ? ' Z' : ''}`
 }
 
-function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, incident, selectedVehicleId, onSelectVehicle, roadsInteractive = true }) {
+const ROAD_COLORS = {
+  expressway: '#3ee8f5',
+  avenue: '#b07cf7',
+  local: '#f59a72',
+}
+
+const EVENT_BADGES = {
+  ACCIDENT: { label: 'ACCIDENTE', tone: 'accident' },
+  TRAFFIC_JAM: { label: 'CONGESTIÓN', tone: 'jam' },
+  ROADWORK: { label: 'OBRAS', tone: 'roadwork' },
+}
+
+// Node label boxes sit on the side that keeps them clear of the roads.
+const NODE_LABEL_SIDE = {
+  NODO_A: 'left',
+  NODO_B: 'left',
+  NODO_C: 'right',
+  NODO_D: 'below',
+  NODO_E: 'right',
+  NODO_F: 'right',
+}
+
+function offsetPoints(points = [], distance = 0) {
+  if (!distance || points.length < 2) return points
+  return points.map(([x, y], index) => {
+    const previous = points[Math.max(0, index - 1)]
+    const next = points[Math.min(points.length - 1, index + 1)]
+    const dx = next[0] - previous[0]
+    const dy = next[1] - previous[1]
+    const length = Math.hypot(dx, dy) || 1
+    return [x + (-dy / length) * distance, y + (dx / length) * distance]
+  })
+}
+
+function nodeLabelBox(node, centroid) {
+  const side = NODE_LABEL_SIDE[node.id]
+    || (Math.abs(node.x - centroid.x) > Math.abs(node.y - centroid.y)
+      ? (node.x < centroid.x ? 'left' : 'right')
+      : (node.y < centroid.y ? 'above' : 'below'))
+  const width = Math.max(node.id.length * 11, (node.district || '').length * 9.4) + 28
+  const height = 58
+  const gap = 26
+  const positions = {
+    left: { x: -gap - width, y: -height / 2 },
+    right: { x: gap, y: -height / 2 },
+    above: { x: -width / 2, y: -gap - height },
+    below: { x: -width / 2, y: gap },
+  }
+  return { ...positions[side], width, height }
+}
+
+function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, selectedVehicleId, onSelectVehicle, roadsInteractive = true }) {
   const map = session?.map
   const vehicles = session?.vehicles || []
-  const width = map?.width || 1000
-  const height = map?.height || 560
+  const width = map?.width || 1376
+  const height = map?.height || 768
 
   if (!map?.nodes?.length || !map?.roads?.length) {
     return (
@@ -88,42 +181,72 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
   }
 
   const nodes = new Map(map.nodes.map((node) => [node.id, node]))
+  const centroid = {
+    x: map.nodes.reduce((sum, node) => sum + node.x, 0) / map.nodes.length,
+    y: map.nodes.reduce((sum, node) => sum + node.y, 0) / map.nodes.length,
+  }
   const originIds = new Set((session.flows || []).map((flow) => flow.originId))
   const destinationIds = new Set((session.flows || []).map((flow) => flow.destinationId))
-  const selectedGeometry = pointsForRoad(map.roads.find((road) => road.id === selectedRoad) || {}, nodes)
-  const selectedMidpoint = selectedGeometry[Math.floor(selectedGeometry.length / 2)]
+  const coordinated = session.strategy !== 'traditional'
+  const userRoute = (session.routes || []).find((route) => route.flowId === 'usuario')
+  const otherView = session.strategyViews?.[coordinated ? 'traditional' : 'coordinated']
+  const otherPath = otherView?.routes?.find((route) => route.flowId === 'usuario')?.nodePath
+  const otherMinutes = otherView?.metrics?.userEstimatedMinutes
+  const userMinutes = session.metrics?.userEstimatedMinutes
+  const shortPath = (path = []) => path.map((nodeId) => nodeId.replace('NODO_', '')).join(' → ')
+  const scalePx = map.geography?.scalePx || 92
 
   return (
     <div className="traffic-map">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Mapa de la simulación de tráfico">
-        <rect width={width} height={height} fill="#14202a" />
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Mapa de la red vial de Lima">
+        <defs>
+          <radialGradient id="map-ground" cx="55%" cy="45%" r="75%">
+            <stop offset="0" stopColor="#131c2b" />
+            <stop offset="1" stopColor="#0a101b" />
+          </radialGradient>
+          <linearGradient id="map-ocean" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#0b3b5c" />
+            <stop offset="1" stopColor="#0f2a44" />
+          </linearGradient>
+          <pattern id="map-streets" width="46" height="46" patternUnits="userSpaceOnUse" patternTransform="rotate(-18)">
+            <path d="M0 0H46M0 0V46" stroke="#1d2a3b" strokeWidth="1" />
+            <path d="M23 0V46" stroke="#172234" strokeWidth=".6" />
+          </pattern>
+          <filter id="map-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="7" />
+          </filter>
+        </defs>
 
+        <rect width={width} height={height} fill="url(#map-ground)" />
+        <rect width={width} height={height} fill="url(#map-streets)" />
         <g className="traffic-map__areas">
-          {(map.areas || []).map((area) => <path key={area.id} className={`city-area city-area--${area.kind}`} d={pathFromPoints(area.points, true)} />)}
+          {(map.areas || []).map((area) => (
+            <path key={area.id} className={`city-area city-area--${area.kind}`} d={pathFromPoints(area.points, true)} fill={area.kind === 'water' ? 'url(#map-ocean)' : undefined} />
+          ))}
         </g>
+
+        <text className="traffic-map__title" x={width / 2} y="70" textAnchor="middle">Superpose — Red vial de Lima</text>
 
         <g className="traffic-map__roads">
           {map.roads.map((road) => {
             const points = pointsForRoad(road, nodes)
             if (!points.length) return null
+            const d = pathFromPoints(points)
             const isSelected = road.id === selectedRoad
-            const isIncident = road.id === incident?.roadId
+            const roadWidth = road.kind === 'expressway' ? 9 : (road.kind === 'avenue' ? 7 : 3.5)
             return (
-              <g key={road.id}>
-                <title>{`${road.label || road.id} · ${road.lengthKm ?? '—'} km · ${road.currentTime ?? road.baseTime ?? '—'} min · ${road.lanes ?? '—'} carriles · carga ${road.load ?? '—'}/${road.capacity ?? '—'}`}</title>
-                <path
-                  className={`traffic-road__edge traffic-road__edge--${road.kind || 'secondary'}`}
-                  d={pathFromPoints(points, road.closed)}
-                  style={{ '--road-width': `${10 + (road.lanes || 1) * 6}px`, '--road-edge-width': `${16 + (road.lanes || 1) * 6}px` }}
-                />
-                <path
-                  className={`traffic-road traffic-road--${road.kind || 'secondary'}${isSelected ? ' traffic-road--selected' : ''}${isIncident ? ' traffic-road--incident' : ''}${road.saturation >= 1 ? ' traffic-road--busy' : ''}`}
-                  d={pathFromPoints(points, road.closed)}
-                  style={{ '--road-width': `${10 + (road.lanes || 1) * 6}px`, '--road-edge-width': `${16 + (road.lanes || 1) * 6}px` }}
-                />
+              <g
+                key={road.id}
+                className={`traffic-road traffic-road--${road.kind}${isSelected ? ' traffic-road--selected' : ''}${road.blocked ? ' traffic-road--blocked' : ''}`}
+                style={{ '--road-color': ROAD_COLORS[road.kind] || ROAD_COLORS.avenue, '--road-width': `${roadWidth}px` }}
+              >
+                <title>{`${road.label} · ${road.lengthKm ?? '—'} km · ${road.blocked ? 'bloqueada' : `${road.currentTime ?? '—'} min`} · ${road.lanes ?? '—'} carriles · carga ${number(road.load, 1)}/${road.capacity ?? '—'}`}</title>
+                <path className="traffic-road__glow" d={d} filter="url(#map-glow)" />
+                <path className="traffic-road__body" d={d} />
+                {road.kind === 'expressway' && <path className="traffic-road__core" d={d} />}
                 <path
                   className={`traffic-road__hit${roadsInteractive ? '' : ' traffic-road__hit--disabled'}`}
-                  d={pathFromPoints(points, road.closed)}
+                  d={d}
                   tabIndex={roadsInteractive ? 0 : undefined}
                   role={roadsInteractive ? 'button' : undefined}
                   aria-label={`Seleccionar vía ${road.label || road.id}`}
@@ -138,84 +261,31 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
         </g>
 
         <g className="traffic-map__routes">
-          {(session.routes || []).map((route, index) => {
-            const badgePoint = route.points?.[Math.max(1, Math.floor((route.points.length - 1) / 2))]
-            const label = route.label || `R${index + 1}`
-            return (
-              <g
-                key={route.id}
-                className="traffic-route"
-                style={{
-                  '--route-color': route.color,
-                  '--route-dash': index === 0 ? 'none' : (index === 1 ? '18 7' : '7 6'),
-                  '--route-offset': index * -4,
-                }}
-                aria-label={`${label}: ${route.id}`}
-              >
-                <path className="traffic-route__casing" d={pathFromPoints(route.points)} />
-                <path className="traffic-route__line" d={pathFromPoints(route.points)} />
-                {badgePoint && (
-                  <g className="traffic-route__badge" transform={`translate(${badgePoint[0]} ${badgePoint[1]})`}>
-                    <rect x="-19" y="-11" width="38" height="22" rx="5" />
-                    <text textAnchor="middle" dominantBaseline="central">{label}</text>
-                  </g>
-                )}
-              </g>
-            )
-          })}
-        </g>
-
-        <g className="traffic-map__markings" aria-hidden="true">
-          {map.roads.map((road) => {
-            const points = pointsForRoad(road, nodes)
-            return points.length
-              ? <path key={road.id} className={`traffic-road__lane traffic-road__lane--${road.kind || 'secondary'}`} d={pathFromPoints(points, road.closed)} />
-              : null
-          })}
+          {(session.routes || []).map((route, index) => (
+            <path
+              key={route.id}
+              className={`traffic-route${route.flowId === 'usuario' ? ' traffic-route--user' : ''}`}
+              style={{ '--route-color': route.color }}
+              d={pathFromPoints(offsetPoints(route.points, -14 - index * 7))}
+            />
+          ))}
         </g>
 
         <g className="traffic-map__labels" aria-hidden="true">
           {map.roads.map((road) => road.labelAt && (
-            <g className="traffic-road-label" key={`${road.id}-label`} transform={`translate(${road.labelAt[0]} ${road.labelAt[1]}) rotate(${road.labelAngle || 0})`}>
-              <rect x="-50" y="-10" width="100" height="20" rx="4" />
-              <text textAnchor="middle" dominantBaseline="central">{number(road.lengthKm, 1)} km · {number(road.currentTime, 1)} min</text>
-            </g>
-          ))}
-          {(map.labels || []).map((label) => <text key={`${label.text}-${label.x}`} className={`city-label city-label--${label.kind}`} x={label.x} y={label.y}>{label.text}</text>)}
-          {(map.badges || []).map((badge) => (
-            <g key={badge.text} transform={`translate(${badge.x} ${badge.y})`}>
-              <rect x="-19" y="-15" width="38" height="30" rx="7" />
-              <text textAnchor="middle" dominantBaseline="central">{badge.text}</text>
+            <g
+              className="traffic-road-label"
+              key={`${road.id}-label`}
+              style={{ '--road-color': ROAD_COLORS[road.kind] || ROAD_COLORS.avenue }}
+              transform={`translate(${road.labelAt[0]} ${road.labelAt[1]}) rotate(${road.labelAngle || 0}) translate(0 ${road.kind === 'local' ? 22 : 28})`}
+            >
+              <rect x="-66" y="-14" width="132" height="28" rx="14" />
+              <text textAnchor="middle" dominantBaseline="central">
+                {number(road.lengthKm, 1)} km · {road.blocked ? 'bloqueada' : `${number(road.currentTime, 1)} min`}
+              </text>
             </g>
           ))}
         </g>
-
-        <g className="traffic-map__nodes">
-          {map.nodes.map((node) => {
-            const isOrigin = originIds.has(node.id)
-            const isDestination = destinationIds.has(node.id)
-            const role = isOrigin && isDestination ? 'Origen · destino' : (isOrigin ? 'Origen' : (isDestination ? 'Destino' : 'Conexión'))
-            return (
-              <g
-                key={node.id}
-                className={`traffic-node${isOrigin ? ' traffic-node--origin' : ''}${isDestination ? ' traffic-node--destination' : ''}`}
-                transform={`translate(${node.x} ${node.y})`}
-              >
-                <title>{`${node.id} · ${role}`}</title>
-                <circle r="16" />
-                <text className="traffic-node__id" textAnchor="middle" dominantBaseline="central">{node.label || node.id.replace('NODO_', '')}</text>
-                <text className="traffic-node__district" x="0" y="34" textAnchor="middle">{node.district}</text>
-              </g>
-            )
-          })}
-        </g>
-
-        {selectedMidpoint && incident && (
-          <g className="traffic-incident" transform={`translate(${selectedMidpoint[0]} ${selectedMidpoint[1]})`}>
-            <circle r="17" />
-            <path d="M-6-6 6 6M6-6-6 6" />
-          </g>
-        )}
 
         <g className="traffic-map__vehicles">
           {vehicles.map((vehicle, index) => {
@@ -252,25 +322,69 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
           })}
         </g>
 
-        <g className="traffic-map__compass" transform={`translate(${width - 48} 46)`} aria-hidden="true">
-          <text x="0" y="-20" textAnchor="middle">N</text>
-          <path d="M0-14 8 12 0 7-8 12Z" />
+        <g className="traffic-map__events" aria-hidden="true">
+          {map.roads.filter((road) => EVENT_BADGES[road.event] && road.geometry?.length).map((road) => {
+            const badge = EVENT_BADGES[road.event]
+            // A quarter of the way along the road, so the badge does not cover the distance label.
+            const [x, y] = road.geometry[Math.floor(road.geometry.length / 4)]
+            const badgeWidth = badge.label.length * 10 + 28
+            return (
+              <g key={`${road.id}-event`} className={`traffic-event traffic-event--${badge.tone}`} transform={`translate(${x} ${y})`}>
+                <rect x={-badgeWidth - 20} y="-15" width={badgeWidth} height="30" rx="7" />
+                <text x={-badgeWidth / 2 - 20} textAnchor="middle" dominantBaseline="central">{badge.label}</text>
+                <circle r="14" />
+                <text className="traffic-event__icon" textAnchor="middle" dominantBaseline="central">{road.event === 'TRAFFIC_JAM' ? '≡' : '!'}</text>
+              </g>
+            )
+          })}
         </g>
-        <g className="traffic-map__scale" transform={`translate(${width - 154} ${height - 34})`} aria-hidden="true">
-          <path d="M0 0V6M0 3H92M92 0V6" />
-          <text x="46" y="-6" textAnchor="middle">{map.geography?.scaleKm || 5} km</text>
+
+        <g className="traffic-map__nodes">
+          {map.nodes.map((node) => {
+            const isOrigin = originIds.has(node.id)
+            const isDestination = destinationIds.has(node.id)
+            const role = isOrigin && isDestination ? 'Origen · destino' : (isOrigin ? 'Origen' : (isDestination ? 'Destino' : 'Conexión'))
+            const box = nodeLabelBox(node, centroid)
+            return (
+              <g key={node.id} className="traffic-node" transform={`translate(${node.x} ${node.y})`}>
+                <title>{`${node.id} · ${node.district} · ${role}`}</title>
+                <circle className="traffic-node__glow" r="22" filter="url(#map-glow)" />
+                <circle className="traffic-node__ring" r="17" />
+                <g className="traffic-node__label" transform={`translate(${box.x} ${box.y})`}>
+                  <rect width={box.width} height={box.height} rx="8" />
+                  <text className="traffic-node__id" x="14" y="22">{node.id}</text>
+                  <text className="traffic-node__district" x="14" y="45">{node.district}</text>
+                </g>
+              </g>
+            )
+          })}
+        </g>
+
+        <g className="traffic-map__compass" transform={`translate(${width - 48} 52)`} aria-hidden="true">
+          <text x="0" y="-18" textAnchor="middle">N</text>
+          <path d="M0-10 9 16 0 10-9 16Z" />
+        </g>
+        <g className="traffic-map__scale" transform={`translate(${width - 60 - scalePx} 104)`} aria-hidden="true">
+          <path d={`M0 -5V5M0 5H${scalePx}M${scalePx} -5V5`} />
+          <text x={scalePx / 2} y="-8" textAnchor="middle">{map.geography?.scaleKm || 5} km</text>
         </g>
       </svg>
-      <div className="traffic-map__context">
-        <strong>{session.strategyLabel || 'Rutas recibidas del backend'}</strong>
-        <span>{session.strategyDescription || '6 nodos · 8 vías'}</span>
-      </div>
-      <div className="traffic-map__source">Lima · 6 nodos · 8 vías del backend</div>
+
+      {userRoute && (
+        <div className="traffic-map__summary">
+          <strong>{coordinated ? 'Ruta QAOA' : 'Ruta Dijkstra'}:</strong>{' '}
+          {shortPath(userRoute.nodePath)} · <em>{minutes(userMinutes)}</em>
+          {coordinated && otherMinutes > userMinutes ? ' · evita la congestión' : ''}
+          {otherPath && (
+            <span>({coordinated ? 'ruta individual' : 'ruta QAOA'} {shortPath(otherPath)} · {minutes(otherMinutes)})</span>
+          )}
+        </div>
+      )}
       <div className="traffic-map__key" aria-hidden="true">
-        <span><i className="key-origin" />Origen</span>
-        <span><i className="key-destination" />Destino</span>
-        <span><i className="key-route" />Ruta asignada</span>
-        <span><i className="key-vehicle" />Auto</span>
+        <span><i className="key-expressway" /><b>cian</b> = vía expresa (3 carriles)</span>
+        <span><i className="key-avenue" /><b>violeta</b> = avenida (2 carriles)</span>
+        <span><i className="key-local" /><b>delgada</b> = un carril</span>
+        <span><i className="key-route" /><b>discontinua</b> = ruta asignada</span>
       </div>
     </div>
   )
@@ -287,14 +401,14 @@ function Metric({ label, value, note }) {
 }
 
 export default function TrafficLab() {
-  const [source, setSource] = useState('demo')
+  const [source, setSource] = useState('backend')
   const [strategy, setStrategy] = useState('coordinated')
   const [vehicleCount, setVehicleCount] = useState(20)
   const [incidentType, setIncidentType] = useState('ACCIDENT')
   const [demoIncidentId, setDemoIncidentId] = useState(MOCK_INCIDENTS[0].id)
-  const [selectedRoad, setSelectedRoad] = useState(MOCK_INCIDENTS[0].roadId)
+  const [selectedRoad, setSelectedRoad] = useState('')
   const [selectedVehicleId, setSelectedVehicleId] = useState('')
-  const [session, setSession] = useState(() => createMockSession(20))
+  const [session, setSession] = useState(null)
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const [elapsedMs, setElapsedMs] = useState(0)
@@ -328,6 +442,10 @@ export default function TrafficLab() {
     frame = requestAnimationFrame(update)
     return () => cancelAnimationFrame(frame)
   }, [status, durationMs])
+
+  useEffect(() => {
+    handleStart()
+  }, [])
 
   async function handleStart() {
     setStatus('connecting')
@@ -407,11 +525,11 @@ export default function TrafficLab() {
       if (!Array.isArray(result.data?.vehicles)) {
         throw new Error('El backend no devolvió las nuevas trayectorias.')
       }
-      setSession((current) => ({ ...current, ...result.data }))
+      setSession((current) => continueSession(current, { ...current, ...result.data }, incidentAt))
       setSelectedVehicleId('')
       setApiLatencyMs(result.latencyMs)
       setIncident({ roadId: incidentPayload.roadId, type: incidentPayload.type, atMs: incidentAt })
-      clockRef.current.origin = performance.now() - incidentAt
+      clockRef.current = { origin: performance.now() - incidentAt, pausedAt: incidentAt }
       setStatus(wasRunning ? 'running' : 'paused')
     } catch (requestError) {
       setStatus(wasRunning ? 'running' : 'paused')
@@ -420,6 +538,7 @@ export default function TrafficLab() {
   }
 
   const metrics = visibleSession?.metrics || {}
+  const flowCount = session?.flows?.length || 0
   const solver = visibleSession?.solver
   const comparison = session?.comparison
   const selectedVehicle = visibleSession?.vehicles?.find((vehicle) => vehicle.id === selectedVehicleId)
@@ -439,7 +558,7 @@ export default function TrafficLab() {
           <span className={`connection-dot connection-dot--${status}`} />
           <div>
             <strong>{STATUS_LABELS[status]}</strong>
-            <span>{session ? `${session.visualVehicleCount || vehicleCount} autos visuales · ${session.modeledVehicles || '—'} modelados · 3 flujos` : API_BASE}</span>
+            <span>{session ? `${session.visualVehicleCount || vehicleCount} autos visuales · ${session.modeledVehicles || '—'} modelados · ${flowCount} flujos` : API_BASE}</span>
           </div>
         </div>
 
@@ -516,7 +635,6 @@ export default function TrafficLab() {
           elapsedMs={elapsedMs}
           selectedRoad={selectedRoad}
           onSelectRoad={setSelectedRoad}
-          incident={incident}
           selectedVehicleId={selectedVehicleId}
           onSelectVehicle={setSelectedVehicleId}
           roadsInteractive={source === 'backend'}
@@ -569,7 +687,7 @@ export default function TrafficLab() {
           <div className="solver-preview">
             <div>
               <strong>{strategy === 'coordinated' ? 'Evidencia Qiskit' : 'Referencia tradicional'}</strong>
-              <span>{solver.mode}{strategy === 'coordinated' ? ` · ${number(solver.problem.binaryVariables)} variables · ${number(solver.problem.constraints)} flujos` : ' · 3 rutas independientes'}</span>
+              <span>{solver.mode}{strategy === 'coordinated' ? ` · ${number(solver.problem.binaryVariables)} variables · ${number(solver.problem.constraints)} flujos` : ` · ${flowCount} rutas independientes`}</span>
             </div>
             <ol>
               {solver.facts.map((fact) => <li key={fact.id}><span>{fact.label}</span><strong className="num">{fact.value}</strong></li>)}
@@ -596,7 +714,7 @@ export default function TrafficLab() {
         <Metric label="Cálculo del solver" value={Number.isFinite(Number(metrics.computeMs)) ? `${number(metrics.computeMs, 1)} ms` : '—'} note={strategy === 'coordinated' ? 'quantum_telemetry.execution_time_ms' : 'No informado por el backend'} />
         <Metric label="Latencia API" value={apiLatencyMs === null ? '—' : `${number(apiLatencyMs, 1)} ms`} note={source === 'demo' ? 'Sin consulta en modo demo' : 'Ida, proceso y vuelta'} />
         <Metric label="Vehículos modelados" value={number(metrics.modeledVehicles)} note={`${visibleSession?.vehicles?.length || vehicleCount} autos visuales`} />
-        <Metric label="Costo medio por flujo" value={minutes(metrics.averageTravelMinutes)} note="Costo agregado ÷ 3 flujos" />
+        <Metric label="Costo medio por flujo" value={minutes(metrics.averageTravelMinutes)} note={`Costo agregado ÷ ${flowCount} flujos`} />
         <Metric label="Saturación máxima" value={Number.isFinite(Number(metrics.maxCongestionPct)) ? `${number(metrics.maxCongestionPct, 1)}%` : '—'} note="edge_loads del backend" />
       </div>
     </div>

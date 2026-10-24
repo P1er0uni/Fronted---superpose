@@ -131,7 +131,7 @@ function App() {
         <section className="lab" id="laboratorio" aria-labelledby="lab-title">
           <div className="lab__heading reveal">
             <h2 id="lab-title">Laboratorio en vivo</h2>
-            <p>Los mismos veinte vehículos recorren la misma ciudad con dos estrategias: Dijkstra individual y asignación conjunta con Qiskit.</p>
+            <p>Los mismos vehículos recorren la misma ciudad con dos estrategias: Dijkstra individual y asignación conjunta con Qiskit.</p>
           </div>
           <div className="lab__disclosure reveal" style={{ '--delay': '80ms' }}>
             <span>La vista previa reproduce un snapshot de Superpose API; el modo Backend consulta el servidor actual.</span>

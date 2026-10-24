@@ -1,23 +1,28 @@
-const MAP_WIDTH = 1000
-const MAP_HEIGHT = 620
-const MAP_PADDING = { left: 86, right: 92, top: 82, bottom: 82 }
+const MAP_WIDTH = 1376
+const MAP_HEIGHT = 768
+const MAP_PADDING = { left: 200, right: 170, top: 128, bottom: 128 }
+const KM_PER_DEGREE_LAT = 110.57
+const BLOCKED_MINUTES = 1000
 
 const FLOW_COLORS = {
-  usuario: '#5be7ef',
+  usuario: '#f4fbff',
   fondo_1: '#f0c96a',
   fondo_2: '#91d6a8',
 }
 
 const EDGE_CURVATURE = {
-  'NODO_A--NODO_B': -18,
-  'NODO_A--NODO_C': 18,
-  'NODO_B--NODO_D': -42,
-  'NODO_B--NODO_E': 10,
-  'NODO_C--NODO_D': 12,
-  'NODO_C--NODO_E': -12,
-  'NODO_D--NODO_F': -20,
-  'NODO_E--NODO_F': -48,
+  'NODO_A--NODO_C': -16,
+  'NODO_E--NODO_F': -120,
 }
+
+// Approximate Lima shoreline (lat, lon), from north of Ventanilla to Chorrillos.
+// Only decorative: it does not take part in routing.
+const COASTLINE = [
+  [-11.80, -77.17], [-11.90, -77.15], [-11.97, -77.14], [-12.02, -77.14],
+  [-12.05, -77.155], [-12.068, -77.172], [-12.075, -77.15], [-12.09, -77.11],
+  [-12.105, -77.075], [-12.12, -77.045], [-12.14, -77.03], [-12.17, -77.02],
+  [-12.25, -76.99],
+]
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value))
@@ -58,23 +63,48 @@ function readableAngle(points) {
   return angle
 }
 
-function projectNodes(nodeDetails) {
+// Equirectangular projection with one scale for both axes, so distances on
+// screen keep the proportions of the real coordinates.
+function createProjection(nodeDetails) {
   const lats = nodeDetails.map((node) => node.lat)
   const lons = nodeDetails.map((node) => node.lon)
   const minLat = Math.min(...lats)
   const maxLat = Math.max(...lats)
   const minLon = Math.min(...lons)
   const maxLon = Math.max(...lons)
+  const lonFactor = Math.cos((((minLat + maxLat) / 2) * Math.PI) / 180)
   const usableWidth = MAP_WIDTH - MAP_PADDING.left - MAP_PADDING.right
   const usableHeight = MAP_HEIGHT - MAP_PADDING.top - MAP_PADDING.bottom
+  const spanX = (maxLon - minLon) * lonFactor || 1
+  const spanY = maxLat - minLat || 1
+  const pxPerDegree = Math.min(usableWidth / spanX, usableHeight / spanY)
+  const offsetX = MAP_PADDING.left + (usableWidth - spanX * pxPerDegree) / 2
+  const offsetY = MAP_PADDING.top + (usableHeight - spanY * pxPerDegree) / 2
+  return {
+    project: (lat, lon) => ({
+      x: offsetX + (lon - minLon) * lonFactor * pxPerDegree,
+      y: offsetY + (maxLat - lat) * pxPerDegree,
+    }),
+    pxPerKm: pxPerDegree / KM_PER_DEGREE_LAT,
+  }
+}
 
+function projectNodes(nodeDetails, project) {
   return nodeDetails.map((node) => ({
     ...node,
     label: shortNode(node.id),
     district: node.label,
-    x: MAP_PADDING.left + ((node.lon - minLon) / (maxLon - minLon || 1)) * usableWidth,
-    y: MAP_PADDING.top + ((maxLat - node.lat) / (maxLat - minLat || 1)) * usableHeight,
+    ...project(node.lat, node.lon),
   }))
+}
+
+function oceanPath(project) {
+  const shore = COASTLINE.map(([lat, lon]) => project(lat, lon))
+  const first = shore[0]
+  const last = shore[shore.length - 1]
+  return [
+    [-200, first.y], ...shore.map(({ x, y }) => [x, y]), [last.x, MAP_HEIGHT + 200], [-200, MAP_HEIGHT + 200],
+  ]
 }
 
 function loadFor(edgeLoads, source, target) {
@@ -82,9 +112,10 @@ function loadFor(edgeLoads, source, target) {
 }
 
 export function buildSuperposeMap(topology, strategy = 'coordinated', edgeLoads = []) {
-  const nodes = projectNodes(topology.node_details || [])
+  const { project, pxPerKm } = createProjection(topology.node_details || [])
+  const nodes = projectNodes(topology.node_details || [], project)
   const nodesById = new Map(nodes.map((node) => [node.id, node]))
-  const roads = (topology.edges || []).map((edge) => {
+  const roads = (topology.edges || []).filter((edge) => nodesById.has(edge.source) && nodesById.has(edge.target)).map((edge) => {
     const id = edgeId(edge.source, edge.target)
     const from = nodesById.get(edge.source)
     const to = nodesById.get(edge.target)
@@ -101,12 +132,13 @@ export function buildSuperposeMap(topology, strategy = 'coordinated', edgeLoads 
       from: edge.source,
       to: edge.target,
       label: `${shortNode(edge.source)}–${shortNode(edge.target)}`,
-      kind: edge.lanes >= 3 ? 'primary' : (edge.lanes === 2 ? 'secondary' : 'local'),
+      kind: edge.lanes >= 3 ? 'expressway' : (edge.lanes === 2 ? 'avenue' : 'local'),
       lanes: edge.lanes,
       lengthKm: edge.length_km,
       speedKmh: edge.speed_kmh,
       baseTime: edge.base_time,
       currentTime: edge.current_time,
+      blocked: Number(edge.current_time) >= BLOCKED_MINUTES,
       capacity: edge.capacity,
       load: vehicles,
       saturation,
@@ -122,10 +154,12 @@ export function buildSuperposeMap(topology, strategy = 'coordinated', edgeLoads 
     height: MAP_HEIGHT,
     nodes,
     roads,
+    areas: [{ id: 'ocean', kind: 'water', points: oceanPath(project) }],
     geography: {
       name: 'Lima metropolitana',
       source: 'Coordenadas aproximadas de Superpose API',
       scaleKm: 5,
+      scalePx: 5 * pxPerKm,
     },
   }
 }
@@ -140,9 +174,19 @@ function roadLookup(map) {
 function geometryForPath(nodePath, map) {
   const roads = roadLookup(map)
   return nodePath.slice(0, -1).flatMap((nodeId, index) => {
-    const match = roads.get(`${nodeId}|${nodePath[index + 1]}`)
-    if (!match) throw new Error(`La respuesta usa una arista inexistente: ${nodeId} → ${nodePath[index + 1]}`)
-    const points = match.reversed ? [...match.road.geometry].reverse() : match.road.geometry
+    const nextId = nodePath[index + 1]
+    const match = roads.get(`${nodeId}|${nextId}`)
+    let points
+    if (match) {
+      points = match.reversed ? [...match.road.geometry].reverse() : match.road.geometry
+    } else {
+      // The backend may omit a closed edge from the topology while a route still uses it.
+      const from = map.nodes.find((node) => node.id === nodeId)
+      const to = map.nodes.find((node) => node.id === nextId)
+      if (!from || !to) throw new Error(`La respuesta usa un nodo inexistente: ${nodeId} → ${nextId}`)
+      console.warn(`La ruta usa una arista ausente de la topología: ${nodeId} → ${nextId}`)
+      points = sampleQuadratic(from, to)
+    }
     return index === 0 ? points : points.slice(1)
   })
 }
@@ -151,7 +195,7 @@ function minutesForPath(nodePath, map) {
   const roads = roadLookup(map)
   return nodePath.slice(0, -1).reduce((total, nodeId, index) => {
     const match = roads.get(`${nodeId}|${nodePath[index + 1]}`)
-    return total + Number(match?.road.currentTime || 0)
+    return total + Math.min(BLOCKED_MINUTES, Number(match?.road.currentTime || 0))
   }, 0)
 }
 
@@ -234,7 +278,7 @@ function createVehicles(flows, routes, map, strategy, visualVehicleCount, optimi
 
 function maximumSaturation(edgeLoads, strategy) {
   const field = strategy === 'coordinated' ? 'saturation_optimized' : 'saturation_selfish'
-  return Math.max(0, ...edgeLoads.map((edge) => Number(edge[field] || 0))) * 100
+  return Math.max(0, ...(edgeLoads || []).map((edge) => Number(edge[field] || 0))) * 100
 }
 
 function solverFor(strategy, optimization, flowCount, visualVehicleCount) {
@@ -264,14 +308,14 @@ function solverFor(strategy, optimization, flowCount, visualVehicleCount) {
     problem: {
       binaryVariables: telemetry.qubits_used,
       constraints: flowCount,
-      candidateRoutes: telemetry.variables.length,
+      candidateRoutes: telemetry.variables?.length ?? 0,
       visualVehicles: visualVehicleCount,
     },
   }
 }
 
 function strategyView(strategy, topology, optimization, visualVehicleCount) {
-  const map = buildSuperposeMap(topology, strategy, optimization.edge_loads)
+  const map = buildSuperposeMap(topology, strategy, optimization.edge_loads || [])
   const routes = createRoutes(optimization.flows, strategy, map)
   const coordinated = strategy === 'coordinated'
   const systemCost = coordinated
@@ -366,7 +410,7 @@ export function adaptSuperposeResponse({
     visualVehicleCount,
     modeledVehicles,
     activeEvents: topology.active_events || [],
-    dataNotice: `${visualVehicleCount} autos visuales representan ${modeledVehicles} vehículos modelados en 3 flujos.`,
+    dataNotice: `${visualVehicleCount} autos visuales representan ${modeledVehicles} vehículos modelados en ${optimization.flows.length} flujos.`,
     ...strategyViews.coordinated,
     strategyViews,
     keyDecision: firstDifferentDecision(strategyViews, optimization.flows),

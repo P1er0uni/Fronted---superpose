@@ -5,17 +5,19 @@ El frontend no calcula rutas. Proyecta el grafo geográfico, anima los flujos y 
 ## Configuración
 
 ```env
-VITE_SIMULATION_API_URL=http://localhost:8000
+VITE_SIMULATION_API_URL=https://superpose-api.vercel.app
 ```
 
-Si la variable no existe, el cliente usa esa misma URL. El backend permite CORS y expone los endpoints bajo `/api/v1`.
+Para un backend local usa `http://localhost:8000`.
+
+Si la variable no existe, el cliente usa esa misma URL. Cada petición se cancela tras `VITE_SIMULATION_TIMEOUT_MS` milisegundos (30000 por defecto). El backend permite CORS y expone los endpoints bajo `/api/v1`.
 
 ## Flujo conectado
 
 Al iniciar:
 
 1. `POST /api/v1/events/reset` devuelve la topología limpia.
-2. `POST /api/v1/route/optimize` recibe `{ "origin": "NODO_A", "destination": "NODO_F", "vehicles": 1 }`.
+2. `POST /api/v1/route/optimize` recibe `{ "origin": "NODO_A", "destination": "NODO_F", "vehicles": 1 }`. Tras un incidente se reutiliza el origen y destino del flujo `usuario` de la sesión.
 3. El adaptador combina ambas respuestas y construye el mapa, las rutas y las trayectorias visuales.
 
 Al reportar un evento:

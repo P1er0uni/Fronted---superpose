@@ -26,7 +26,8 @@ En lugar de recomendar la misma ruta aparentemente óptima a todos los autos, el
 
 - Debe responder a reportes como accidentes, vías cerradas, obras y alta demanda.
 - El backend previsto usará Qiskit para formular y ejecutar la optimización cuántica o híbrida.
-- La primera versión es una interfaz conceptual local; el simulador y el motor cuántico todavía no están conectados.
+- El frontend se conecta a Superpose API (`/api/v1/events/reset`, `/api/v1/route/optimize`, `/api/v1/events/report`), que ejecuta QAOA con Qiskit y Dijkstra con NetworkX. El navegador no calcula rutas.
+- La vista previa reproduce un snapshot versionado del backend para presentar la demo sin servidor; el modo Backend muestra la respuesta real.
 - Debe poder desplegarse posteriormente en Vercel.
 
 ## Brand Commitments
@@ -35,7 +36,7 @@ El concepto de trabajo es “superwaze”. Qflow es un nombre provisional para e
 
 ## Evidence on Hand
 
-No hay todavía datos reales, benchmarks, clientes, testimonios ni capturas de un producto existente. La interfaz debe identificar claramente los valores demostrativos.
+El escenario es una red simplificada de Lima (6 nodos, 8 vías, 3 flujos, 51 vehículos) con coordenadas aproximadas. No hay todavía datos de tráfico reales, benchmarks, clientes ni testimonios. La interfaz debe identificar claramente los valores demostrativos.
 
 ## Product Principles
 

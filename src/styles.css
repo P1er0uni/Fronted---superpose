@@ -280,60 +280,64 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
 .strategy-test__decision strong { font-size: .8rem; font-weight: 500; line-height: 1.35; }
 .strategy-test > p { grid-column: 1 / -1; margin: 0; background: #1a1f1a; color: var(--lab-muted); font-size: .75rem; line-height: 1.45; }
 .strategy-test > p strong { color: var(--lab-ink); font-weight: 500; }
-.traffic-lab__stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; min-height: 620px; }
-.traffic-map { position: relative; min-width: 0; background: #17222c; overflow: hidden; }
-.traffic-map--empty { display: grid; place-items: center; padding: 2rem; text-align: center; }
+.traffic-lab__stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; }
+.traffic-map { position: relative; min-width: 0; background: #0a101b; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+.traffic-map--empty { display: grid; place-items: center; padding: 2rem; text-align: center; min-height: 520px; }
 .traffic-map--empty div { max-width: 380px; }
 .traffic-map--empty strong { display: block; font-size: 1.15rem; font-weight: 500; }
 .traffic-map--empty p { color: var(--lab-muted); margin: .75rem 0 0; }
-.traffic-map svg { width: 100%; height: 100%; min-height: 620px; display: block; }
+.traffic-map svg { width: 100%; height: auto; display: block; }
 .city-area { stroke: none; }
-.city-area--park { fill: #245443; }
-.city-area--water { fill: #112d3c; }
-.traffic-road__edge,
-.traffic-road,
-.traffic-road__lane { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; transition: stroke .18s ease, stroke-width .18s ease; }
-.traffic-road__edge { stroke: #081117; stroke-width: var(--road-edge-width, 28px); opacity: 1; }
-.traffic-road { stroke: #45545e; stroke-width: var(--road-width, 20px); opacity: 1; }
-.traffic-road--primary { stroke: #586c78; }
-.traffic-road--local { stroke: #3b4851; }
-.traffic-road__lane { stroke: #e5ebee; stroke-width: 1.6; stroke-dasharray: 10 9; opacity: .82; }
-.traffic-road__lane--primary { stroke-width: 1.8; stroke-dasharray: 13 9; }
-.traffic-road--selected { stroke: #6f828d; }
-.traffic-road--incident { stroke: #7a4037; stroke-dasharray: 18 9; }
-.traffic-road--busy { stroke: #77603d; }
-.traffic-road__hit { fill: none; stroke: transparent; stroke-width: 38; cursor: pointer; outline: none; }
+.city-area--water { stroke: #2b6d93; stroke-width: 1.5; stroke-opacity: .5; }
+.traffic-map__title { fill: #e9eef5; font-size: 40px; font-weight: 500; letter-spacing: -.01em; pointer-events: none; }
+
+.traffic-road path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.traffic-road__glow { stroke: var(--road-color); stroke-width: calc(var(--road-width) * 2.2); opacity: .45; pointer-events: none; }
+.traffic-road__body { stroke: var(--road-color); stroke-width: var(--road-width); pointer-events: none; transition: stroke-width .18s ease; }
+.traffic-road__core { stroke: #0a101b; stroke-width: 2.5; opacity: .75; pointer-events: none; }
+.traffic-road--local .traffic-road__glow { opacity: .35; }
+.traffic-road--blocked .traffic-road__body { stroke-dasharray: 14 10; }
+.traffic-road--selected .traffic-road__body { stroke: #ffffff; }
+.traffic-road__hit { stroke: transparent; stroke-width: 34; cursor: pointer; outline: none; }
 .traffic-road__hit--disabled { cursor: default; }
-.traffic-map__roads g:has(.traffic-road__hit:hover) .traffic-road,
-.traffic-map__roads g:has(.traffic-road__hit:focus) .traffic-road { stroke: #9cb9cd; }
+.traffic-map__roads .traffic-road:has(.traffic-road__hit:hover) .traffic-road__body,
+.traffic-map__roads .traffic-road:has(.traffic-road__hit:focus-visible) .traffic-road__body { stroke-width: calc(var(--road-width) + 4px); }
+
 .traffic-map__routes { pointer-events: none; }
-.traffic-route__casing,
-.traffic-route__line { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.traffic-route__casing { stroke: #071017; stroke-width: 11; opacity: .4; }
-.traffic-route__line { stroke: var(--route-color); stroke-width: 7; stroke-dasharray: var(--route-dash); stroke-dashoffset: var(--route-offset); opacity: .82; }
-.traffic-route__badge rect { fill: #071017; stroke: var(--route-color); stroke-width: 2; }
-.traffic-route__badge text { fill: #f5f6f1; font-size: 11px; font-weight: 700; }
+.traffic-route { fill: none; stroke: var(--route-color); stroke-width: 2.5; stroke-dasharray: 10 8; stroke-linecap: round; stroke-linejoin: round; opacity: .8; animation: route-flow 1.2s linear infinite; }
+.traffic-route--user { stroke-width: 3.5; opacity: 1; }
+@keyframes route-flow { to { stroke-dashoffset: -18; } }
+
 .traffic-map__labels { pointer-events: none; }
-.city-label { fill: #b8c7d0; font-size: 14px; paint-order: stroke; stroke: #17222c; stroke-width: 5px; stroke-linejoin: round; }
-.city-label--district { fill: #d6dfe4; font-size: 18px; }
-.city-label--park { fill: #78c59c; }
-.city-label--street { fill: #b9cbd6; font-size: 12px; }
-.traffic-map__labels rect { fill: #eef6fa; stroke: #17222c; stroke-width: 4; }
-.traffic-map__labels g text { fill: #17649b; font-size: 14px; font-weight: 500; stroke: none; }
-.traffic-road-label rect { fill: #1d2b34; stroke: #788a94; stroke-width: 1.5; }
-.traffic-map__labels .traffic-road-label text { fill: #e9eff2; font-size: 11px; font-weight: 600; }
+.traffic-road-label rect { fill: #0d1522; fill-opacity: .92; stroke: var(--road-color); stroke-opacity: .7; stroke-width: 1.5; }
+.traffic-road-label text { fill: #e9eef5; font-size: 15px; font-weight: 500; }
+
+.traffic-map__events { pointer-events: none; }
+.traffic-event rect { stroke-width: 1.5; }
+.traffic-event text { font-size: 15px; font-weight: 600; letter-spacing: .03em; }
+.traffic-event circle { stroke: #fff; stroke-width: 2; }
+.traffic-event .traffic-event__icon { fill: #fff; font-size: 18px; font-weight: 800; }
+.traffic-event--accident rect { fill: #3b0f16; stroke: #ef4f5f; }
+.traffic-event--accident text { fill: #ff8a95; }
+.traffic-event--accident circle { fill: #e23446; }
+.traffic-event--jam rect { fill: #3a2108; stroke: #f39a2e; }
+.traffic-event--jam text { fill: #ffc17a; }
+.traffic-event--jam circle { fill: #f08a1c; }
+.traffic-event--roadwork rect { fill: #352b08; stroke: #e8c43a; }
+.traffic-event--roadwork text { fill: #f6dc7a; }
+.traffic-event--roadwork circle { fill: #d4ad16; }
+
 .traffic-node { pointer-events: none; }
-.traffic-node circle { fill: #18252d; stroke: #91a2ac; stroke-width: 3; }
-.traffic-node--origin circle { stroke: #59d9ff; stroke-width: 4; }
-.traffic-node--destination circle { fill: #eef4f6; stroke: #111b21; stroke-width: 4; }
-.traffic-node__id { fill: #f5f8f9; font-size: 14px; font-weight: 800; }
-.traffic-node--destination .traffic-node__id { fill: #111b21; }
-.traffic-node__district { fill: #e7eef1; font-size: 12px; font-weight: 600; paint-order: stroke; stroke: #14202a; stroke-width: 5px; stroke-linejoin: round; }
-.traffic-map__compass text, .traffic-map__scale text { fill: #b7c5cd; font-size: 12px; font-weight: 600; }
-.traffic-map__compass path { fill: #b7c5cd; }
-.traffic-map__scale path { fill: none; stroke: #b7c5cd; stroke-width: 1.5; }
-.traffic-incident circle { fill: var(--lab-alert); stroke: #fff; stroke-width: 4; }
-.traffic-incident path { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; }
+.traffic-node__glow { fill: #5be7ef; opacity: .45; }
+.traffic-node__ring { fill: #2a3550; stroke: #7af0f7; stroke-width: 4; }
+.traffic-node__label rect { fill: #121a28; fill-opacity: .9; stroke: #3a4a62; stroke-width: 1.5; }
+.traffic-node__id { fill: #f4f7fb; font-size: 19px; font-weight: 700; }
+.traffic-node__district { fill: #cdd6e2; font-size: 17px; font-weight: 400; }
+
+.traffic-map__compass text, .traffic-map__scale text { fill: #b9c6d6; font-size: 15px; font-weight: 500; }
+.traffic-map__compass path { fill: #b9c6d6; }
+.traffic-map__scale path { fill: none; stroke: #b9c6d6; stroke-width: 1.5; }
+
 .traffic-vehicle__halo { fill: #071017; stroke: #f5f6f1; stroke-width: 1.25; opacity: .88; transition: fill .16s ease, stroke-width .16s ease, r .16s ease; }
 .traffic-vehicle__wheel { fill: #050708; stroke: #c6d0d5; stroke-width: .55; }
 .traffic-vehicle__body { fill: var(--vehicle-color); stroke: #f5f6f1; stroke-width: 1.8; stroke-linejoin: round; }
@@ -343,17 +347,22 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
 .traffic-vehicle-group { cursor: pointer; outline: none; }
 .traffic-vehicle-group:focus .traffic-vehicle__halo,
 .traffic-vehicle-group--selected .traffic-vehicle__halo { fill: #f5f6f1; stroke: var(--lab-accent); stroke-width: 3; opacity: 1; }
-.traffic-map__key { position: absolute; left: 1rem; bottom: 1rem; display: flex; gap: 1rem; background: #101210e6; padding: .6rem .75rem; color: var(--lab-muted); font-size: .72rem; }
-.traffic-map__key span { display: flex; align-items: center; gap: .35rem; }
-.traffic-map__key i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.key-origin { background: var(--lab-ink); }
-.key-destination { border: 2px solid var(--lab-ink); }
-.traffic-map__key .key-route { width: 18px; height: 4px; border-radius: 2px; background: var(--lab-accent); }
-.traffic-map__key .key-vehicle { width: 13px; height: 8px; border-radius: 3px; background: var(--vehicle-2); }
-.traffic-map__context { position: absolute; top: 1rem; left: 1rem; display: grid; gap: .22rem; max-width: min(300px, 48%); background: #0c151be8; padding: .65rem .75rem; }
-.traffic-map__context strong { font-size: .78rem; font-weight: 500; }
-.traffic-map__context span { color: #aebcc4; font-size: .72rem; line-height: 1.35; }
-.traffic-map__source { position: absolute; top: 1rem; right: 1rem; background: #0c151bd9; color: #d8e1e5; padding: .55rem .7rem; font-size: .72rem; }
+
+.traffic-map__summary { position: absolute; left: 1rem; bottom: 1rem; max-width: min(460px, 55%); background: #121a28e8; border: 1px solid #3a4a62; border-radius: 10px; padding: .7rem .9rem; color: #e9eef5; font-size: .9rem; line-height: 1.45; }
+.traffic-map__summary strong { font-weight: 700; }
+.traffic-map__summary em { color: #5be7ef; font-style: normal; }
+.traffic-map__summary span { display: block; color: #aab6c6; }
+.traffic-map__key { position: absolute; right: 1rem; bottom: 1rem; display: grid; gap: .2rem; background: #121a28e8; border: 1px solid #3a4a62; border-radius: 10px; padding: .6rem .8rem; color: #cdd6e2; font-size: .74rem; }
+.traffic-map__key span { display: flex; align-items: center; gap: .45rem; }
+.traffic-map__key b { font-weight: 500; }
+.traffic-map__key i { display: inline-block; width: 18px; border-radius: 2px; }
+.traffic-map__key .key-expressway { height: 5px; background: #3ee8f5; }
+.traffic-map__key .key-expressway + b { color: #3ee8f5; }
+.traffic-map__key .key-avenue { height: 4px; background: #b07cf7; }
+.traffic-map__key .key-avenue + b { color: #b07cf7; }
+.traffic-map__key .key-local { height: 2px; background: #f59a72; }
+.traffic-map__key .key-route { height: 0; border-top: 2px dashed #f4fbff; border-radius: 0; }
+.traffic-map__key .key-route + b { color: #9fb7d6; }
 .incident-panel { background: var(--lab-surface); padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; border-left: 1px solid var(--lab-rule); /* taste-skill-ignore: data-ui panel divider */ }
 .incident-panel > div:first-child strong { font-size: 1rem; font-weight: 500; }
 .incident-panel p { color: var(--lab-muted); font-size: .8rem; margin: .45rem 0 0; line-height: 1.5; }
@@ -497,7 +506,6 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
   .strategy-test { grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr); }
   .strategy-test__decision { grid-column: 1 / -1; }
   .traffic-lab__stage { grid-template-columns: 1fr; }
-  .traffic-map, .traffic-map svg { min-height: 520px; }
   .incident-panel { border-left: 0; border-top: 1px solid var(--lab-rule); /* taste-skill-ignore: data-ui responsive divider */ display: grid; grid-template-columns: 1fr 1fr; }
   .incident-panel > div:first-child { grid-column: 1 / -1; }
   .incident-panel > button { margin-top: 0; }
@@ -535,10 +543,8 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
   .strategy-switch button { min-height: 72px; }
   .strategy-test__decision { grid-column: auto; }
   .traffic-lab__stage { min-height: auto; }
-  .traffic-map, .traffic-map svg { min-height: 430px; }
-  .traffic-map__key { right: 1rem; justify-content: space-between; }
-  .traffic-map__context { max-width: calc(100% - 2rem); }
-  .traffic-map__source { display: none; }
+  .traffic-map__key { display: none; }
+  .traffic-map__summary { position: static; max-width: none; border-radius: 0; border-width: 1px 0 0; }
   .incident-panel { grid-template-columns: 1fr; }
   .incident-panel > div:first-child { grid-column: auto; }
   .solver-preview > div, .strategy-comparison__heading { align-items: flex-start; flex-direction: column; gap: .25rem; }
