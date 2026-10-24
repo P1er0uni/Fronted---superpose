@@ -26,4 +26,4 @@ npm run build
 npm run preview
 ```
 
-La carpeta generada es `dist/` y el proyecto puede importarse directamente en Vercel.
+La carpeta generada es `dist/`. Para publicarlo en Vercel sigue [`DEPLOY.md`](./DEPLOY.md).
