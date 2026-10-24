@@ -1,4 +1,4 @@
-export { applyMockIncident, createMockSession, MOCK_INCIDENTS } from './backendPreview'
+export { applyMockIncident, createMockSession, MOCK_INCIDENTS } from './backendSnapshot.js'
 
 /* Legacy mock retained temporarily for reference while the API adapter is implemented.
 import { DEMO_MAP } from './demoScenario'

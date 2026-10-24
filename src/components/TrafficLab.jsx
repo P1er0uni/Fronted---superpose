@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { API_BASE, reportIncident, startSimulation } from '../api/simulation'
+import { API_BASE, reportIncident, startSimulation } from '../api/superposeApi'
 import { applyMockIncident, createMockSession, MOCK_INCIDENTS } from '../data/mockBackend'
 
 const INCIDENTS = [
-  { value: 'accident', label: 'Accidente' },
-  { value: 'closure', label: 'Vía cerrada' },
-  { value: 'roadworks', label: 'Obras' },
-  { value: 'demand_spike', label: 'Alta demanda' },
+  { value: 'ACCIDENT', label: 'Accidente' },
+  { value: 'TRAFFIC_JAM', label: 'Congestión' },
+  { value: 'ROADWORK', label: 'Obras' },
 ]
 
 const STATUS_LABELS = {
@@ -30,6 +29,10 @@ function seconds(value) {
   const total = Number(value)
   if (total < 60) return `${number(total, 1)} s`
   return `${Math.floor(total / 60)} min ${Math.round(total % 60)} s`
+}
+
+function minutes(value) {
+  return Number.isFinite(Number(value)) ? `${number(value, 1)} min` : '—'
 }
 
 function pointAt(timeline = [], elapsedMs = 0) {
@@ -107,9 +110,17 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
             const isIncident = road.id === incident?.roadId
             return (
               <g key={road.id}>
-                <title>{`${road.label || road.id} · ${road.baseTime ?? '—'} min · capacidad ${road.capacity ?? '—'}`}</title>
-                <path className={`traffic-road__edge traffic-road__edge--${road.kind || 'secondary'}`} d={pathFromPoints(points, road.closed)} />
-                <path className={`traffic-road traffic-road--${road.kind || 'secondary'}${isSelected ? ' traffic-road--selected' : ''}${isIncident ? ' traffic-road--incident' : ''}`} d={pathFromPoints(points, road.closed)} />
+                <title>{`${road.label || road.id} · ${road.lengthKm ?? '—'} km · ${road.currentTime ?? road.baseTime ?? '—'} min · ${road.lanes ?? '—'} carriles · carga ${road.load ?? '—'}/${road.capacity ?? '—'}`}</title>
+                <path
+                  className={`traffic-road__edge traffic-road__edge--${road.kind || 'secondary'}`}
+                  d={pathFromPoints(points, road.closed)}
+                  style={{ '--road-width': `${10 + (road.lanes || 1) * 6}px`, '--road-edge-width': `${16 + (road.lanes || 1) * 6}px` }}
+                />
+                <path
+                  className={`traffic-road traffic-road--${road.kind || 'secondary'}${isSelected ? ' traffic-road--selected' : ''}${isIncident ? ' traffic-road--incident' : ''}${road.saturation >= 1 ? ' traffic-road--busy' : ''}`}
+                  d={pathFromPoints(points, road.closed)}
+                  style={{ '--road-width': `${10 + (road.lanes || 1) * 6}px`, '--road-edge-width': `${16 + (road.lanes || 1) * 6}px` }}
+                />
                 <path
                   className={`traffic-road__hit${roadsInteractive ? '' : ' traffic-road__hit--disabled'}`}
                   d={pathFromPoints(points, road.closed)}
@@ -165,9 +176,9 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
 
         <g className="traffic-map__labels" aria-hidden="true">
           {map.roads.map((road) => road.labelAt && (
-            <g className="traffic-road-label" key={`${road.id}-label`} transform={`translate(${road.labelAt[0]} ${road.labelAt[1]})`}>
-              <rect x="-28" y="-10" width="56" height="20" rx="4" />
-              <text textAnchor="middle" dominantBaseline="central">{road.baseTime} min</text>
+            <g className="traffic-road-label" key={`${road.id}-label`} transform={`translate(${road.labelAt[0]} ${road.labelAt[1]}) rotate(${road.labelAngle || 0})`}>
+              <rect x="-50" y="-10" width="100" height="20" rx="4" />
+              <text textAnchor="middle" dominantBaseline="central">{number(road.lengthKm, 1)} km · {number(road.currentTime, 1)} min</text>
             </g>
           ))}
           {(map.labels || []).map((label) => <text key={`${label.text}-${label.x}`} className={`city-label city-label--${label.kind}`} x={label.x} y={label.y}>{label.text}</text>)}
@@ -193,7 +204,7 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
                 <title>{`${node.id} · ${role}`}</title>
                 <circle r="16" />
                 <text className="traffic-node__id" textAnchor="middle" dominantBaseline="central">{node.label || node.id.replace('NODO_', '')}</text>
-                <text className="traffic-node__role" x="0" y="31" textAnchor="middle">{role}</text>
+                <text className="traffic-node__district" x="0" y="34" textAnchor="middle">{node.district}</text>
               </g>
             )
           })}
@@ -240,12 +251,21 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
             )
           })}
         </g>
+
+        <g className="traffic-map__compass" transform={`translate(${width - 48} 46)`} aria-hidden="true">
+          <text x="0" y="-20" textAnchor="middle">N</text>
+          <path d="M0-14 8 12 0 7-8 12Z" />
+        </g>
+        <g className="traffic-map__scale" transform={`translate(${width - 154} ${height - 34})`} aria-hidden="true">
+          <path d="M0 0V6M0 3H92M92 0V6" />
+          <text x="46" y="-6" textAnchor="middle">{map.geography?.scaleKm || 5} km</text>
+        </g>
       </svg>
       <div className="traffic-map__context">
         <strong>{session.strategyLabel || 'Rutas recibidas del backend'}</strong>
         <span>{session.strategyDescription || '6 nodos · 8 vías'}</span>
       </div>
-      <div className="traffic-map__source">6 nodos · 8 vías · solo A–F son cruces</div>
+      <div className="traffic-map__source">Lima · 6 nodos · 8 vías del backend</div>
       <div className="traffic-map__key" aria-hidden="true">
         <span><i className="key-origin" />Origen</span>
         <span><i className="key-destination" />Destino</span>
@@ -270,7 +290,7 @@ export default function TrafficLab() {
   const [source, setSource] = useState('demo')
   const [strategy, setStrategy] = useState('coordinated')
   const [vehicleCount, setVehicleCount] = useState(20)
-  const [incidentType, setIncidentType] = useState('accident')
+  const [incidentType, setIncidentType] = useState('ACCIDENT')
   const [demoIncidentId, setDemoIncidentId] = useState(MOCK_INCIDENTS[0].id)
   const [selectedRoad, setSelectedRoad] = useState(MOCK_INCIDENTS[0].roadId)
   const [selectedVehicleId, setSelectedVehicleId] = useState('')
@@ -283,9 +303,9 @@ export default function TrafficLab() {
   const clockRef = useRef({ origin: 0, pausedAt: 0 })
 
   const visibleSession = useMemo(() => {
-    const strategyView = source === 'demo' ? session?.strategyViews?.[strategy] : null
+    const strategyView = session?.strategyViews?.[strategy]
     return strategyView ? { ...session, ...strategyView } : session
-  }, [session, source, strategy])
+  }, [session, strategy])
 
   const durationMs = useMemo(() => {
     const ends = (visibleSession?.vehicles || []).map((vehicle) => vehicle.timeline?.at(-1)?.atMs || 0)
@@ -319,7 +339,7 @@ export default function TrafficLab() {
     try {
       const result = source === 'demo'
         ? { data: createMockSession(vehicleCount), latencyMs: null }
-        : await startSimulation({ vehicleCount, strategy: strategy === 'coordinated' ? 'coordinated' : 'individual' })
+        : await startSimulation({ vehicleCount })
       if (!result.data?.sessionId || !result.data?.map || !Array.isArray(result.data?.vehicles)) {
         throw new Error('La respuesta no cumple el contrato de simulación.')
       }
@@ -383,14 +403,14 @@ export default function TrafficLab() {
       if (source === 'demo') await new Promise((resolve) => setTimeout(resolve, 650))
       const result = source === 'demo'
         ? { data: applyMockIncident(session, incidentPayload), latencyMs: null }
-        : await reportIncident(session.sessionId, incidentPayload)
+        : await reportIncident(session, incidentPayload, vehicleCount)
       if (!Array.isArray(result.data?.vehicles)) {
         throw new Error('El backend no devolvió las nuevas trayectorias.')
       }
       setSession((current) => ({ ...current, ...result.data }))
       setSelectedVehicleId('')
       setApiLatencyMs(result.latencyMs)
-      setIncident({ roadId: selectedRoad, type: incidentType, atMs: incidentAt })
+      setIncident({ roadId: incidentPayload.roadId, type: incidentPayload.type, atMs: incidentAt })
       clockRef.current.origin = performance.now() - incidentAt
       setStatus(wasRunning ? 'running' : 'paused')
     } catch (requestError) {
@@ -407,6 +427,7 @@ export default function TrafficLab() {
   const congestionDifference = comparison
     ? comparison.individual.maxCongestionPct - comparison.coordinated.maxCongestionPct
     : null
+  const selectedRoadData = visibleSession?.map?.roads?.find((road) => road.id === selectedRoad)
   const activePath = session?.keyDecision
     ? (strategy === 'coordinated' ? session.keyDecision.coordinatedPath : session.keyDecision.traditionalPath)
     : null
@@ -418,7 +439,7 @@ export default function TrafficLab() {
           <span className={`connection-dot connection-dot--${status}`} />
           <div>
             <strong>{STATUS_LABELS[status]}</strong>
-            <span>{source === 'demo' ? `${vehicleCount} autos visuales · 3 flujos · ${strategy === 'coordinated' ? '6 variables QUBO' : '3 rutas Dijkstra'}` : API_BASE}</span>
+            <span>{session ? `${session.visualVehicleCount || vehicleCount} autos visuales · ${session.modeledVehicles || '—'} modelados · 3 flujos` : API_BASE}</span>
           </div>
         </div>
 
@@ -451,7 +472,7 @@ export default function TrafficLab() {
         </div>
       )}
 
-      {source === 'demo' && comparison && (
+      {comparison && (
         <div className="strategy-test" data-ui>
           <div className="strategy-test__intro">
             <strong>Prueba A/B · misma ciudad, mismos autos</strong>
@@ -465,7 +486,7 @@ export default function TrafficLab() {
               onClick={() => handleStrategyChange('traditional')}
             >
               <span>Tradicional</span>
-              <strong>{seconds(comparison.individual.averageTravelSeconds)}</strong>
+              <strong>{minutes(comparison.individual.userEstimatedMinutes)}</strong>
               <small>Una ruta mínima por flujo</small>
             </button>
             <button
@@ -475,7 +496,7 @@ export default function TrafficLab() {
               onClick={() => handleStrategyChange('coordinated')}
             >
               <span>Qflow · Qiskit</span>
-              <strong>{seconds(comparison.coordinated.averageTravelSeconds)}</strong>
+              <strong>{minutes(comparison.coordinated.userEstimatedMinutes)}</strong>
               <small>Una asignación para toda la red</small>
             </button>
           </div>
@@ -485,7 +506,7 @@ export default function TrafficLab() {
               <strong>{strategy === 'coordinated' ? 'Qflow' : 'Tradicional'} asigna {activePath}</strong>
             </div>
           )}
-          <p>Qflow reduce la congestión máxima en <strong>{number(congestionDifference)} puntos</strong>, aunque requiere más tiempo de cálculo.</p>
+          <p>Qflow reduce el costo total de la red en <strong>{number(comparison.systemImprovementPct, 1)}%</strong>{congestionDifference > 0 ? ` y la saturación máxima en ${number(congestionDifference, 1)} puntos` : ''}.</p>
         </div>
       )}
 
@@ -522,7 +543,7 @@ export default function TrafficLab() {
           )}
           <div className="incident-panel__road">
             <span>Vía seleccionada</span>
-            <strong>{source === 'demo' ? MOCK_INCIDENTS.find((item) => item.id === demoIncidentId).roadLabel : (selectedRoad || 'Haz clic en el mapa')}</strong>
+            <strong>{source === 'demo' ? MOCK_INCIDENTS.find((item) => item.id === demoIncidentId).roadLabel : (selectedRoadData ? `${selectedRoadData.label} · ${selectedRoadData.lanes} carriles` : 'Haz clic en el mapa')}</strong>
           </div>
           <button type="button" onClick={handleIncident} disabled={!session || !selectedRoad || !['running', 'paused'].includes(status)}>
             Aplicar incidente
@@ -533,7 +554,7 @@ export default function TrafficLab() {
               <span>{selectedVehicle.id} · {selectedVehicle.rerouted ? 'Redirigido' : 'Ruta mantenida'}</span>
               <strong>{selectedVehicle.flowLabel}</strong>
               <p>{selectedVehicle.explanation}</p>
-              <small>Ruta {selectedVehicle.routeId} · ETA {seconds(selectedVehicle.estimatedTravelSeconds)}</small>
+              <small>Ruta {selectedVehicle.routeId} · ETA {minutes(selectedVehicle.estimatedTravelMinutes)} · representa ~{number(selectedVehicle.representedVehicles, 1)} vehículos</small>
             </div>
           ) : <small>Selecciona un auto en el mapa para explicar su asignación.</small>}
         </aside>
@@ -547,24 +568,24 @@ export default function TrafficLab() {
         <div className="traffic-lab__evidence" data-ui>
           <div className="solver-preview">
             <div>
-              <strong>{strategy === 'coordinated' ? 'Flujo Qiskit simulado' : 'Flujo tradicional simulado'}</strong>
-              <span>{solver.mode}{strategy === 'coordinated' ? ` · ${number(solver.problem.binaryVariables)} variables · ${number(solver.problem.constraints)} restricciones` : ' · 3 rutas independientes'}</span>
+              <strong>{strategy === 'coordinated' ? 'Evidencia Qiskit' : 'Referencia tradicional'}</strong>
+              <span>{solver.mode}{strategy === 'coordinated' ? ` · ${number(solver.problem.binaryVariables)} variables · ${number(solver.problem.constraints)} flujos` : ' · 3 rutas independientes'}</span>
             </div>
             <ol>
-              {solver.stages.map((stage) => <li key={stage.id}><span>{stage.label}</span><strong className="num">{number(stage.durationMs, 1)} ms</strong></li>)}
+              {solver.facts.map((fact) => <li key={fact.id}><span>{fact.label}</span><strong className="num">{fact.value}</strong></li>)}
             </ol>
           </div>
           <div className="strategy-comparison">
             <div className="strategy-comparison__heading">
               <strong>Individual vs. coordinada</strong>
-              <span>Valores demostrativos</span>
+              <span>{source === 'demo' ? 'Snapshot versionado del backend' : 'Respuesta actual de Superpose API'}</span>
             </div>
             <div className="strategy-comparison__table">
               <span /> <span className={strategy === 'traditional' ? 'is-active' : ''}>Tradicional</span><span className={strategy === 'coordinated' ? 'is-active' : ''}>Qflow</span>
-              <strong>Cálculo</strong><span className="num">{number(comparison.individual.computeMs, 1)} ms</span><span className="num">{number(comparison.coordinated.computeMs, 1)} ms</span>
-              <strong>Viaje promedio</strong><span className="num">{seconds(comparison.individual.averageTravelSeconds)}</span><span className="num">{seconds(comparison.coordinated.averageTravelSeconds)}</span>
-              <strong>Congestión máxima</strong><span className="num">{number(comparison.individual.maxCongestionPct)}%</span><span className="num">{number(comparison.coordinated.maxCongestionPct)}%</span>
-              <strong>Último en llegar</strong><span className="num">{seconds(comparison.individual.lastArrivalSeconds)}</span><span className="num">{seconds(comparison.coordinated.lastArrivalSeconds)}</span>
+              <strong>Usuario estimado</strong><span className="num">{minutes(comparison.individual.userEstimatedMinutes)}</span><span className="num">{minutes(comparison.coordinated.userEstimatedMinutes)}</span>
+              <strong>Costo total red</strong><span className="num">{number(comparison.individual.systemCost, 1)}</span><span className="num">{number(comparison.coordinated.systemCost, 1)}</span>
+              <strong>Saturación máxima</strong><span className="num">{number(comparison.individual.maxCongestionPct)}%</span><span className="num">{number(comparison.coordinated.maxCongestionPct)}%</span>
+              <strong>Cálculo solver</strong><span className="num">—</span><span className="num">{number(comparison.coordinated.computeMs, 1)} ms</span>
             </div>
           </div>
         </div>
@@ -572,11 +593,11 @@ export default function TrafficLab() {
 
       <div className="traffic-lab__metrics" data-ui>
         <Metric label="Tiempo simulado" value={seconds(elapsedMs / 1000)} note="Reloj de la sesión" />
-        <Metric label="Cálculo del backend" value={Number.isFinite(Number(metrics.computeMs)) ? `${number(metrics.computeMs, 1)} ms` : '—'} note={source === 'demo' ? (strategy === 'coordinated' ? 'Tiempo mock de Qiskit' : 'Tiempo mock de Dijkstra') : 'Informado por el servidor'} />
+        <Metric label="Cálculo del solver" value={Number.isFinite(Number(metrics.computeMs)) ? `${number(metrics.computeMs, 1)} ms` : '—'} note={strategy === 'coordinated' ? 'quantum_telemetry.execution_time_ms' : 'No informado por el backend'} />
         <Metric label="Latencia API" value={apiLatencyMs === null ? '—' : `${number(apiLatencyMs, 1)} ms`} note={source === 'demo' ? 'Sin consulta en modo demo' : 'Ida, proceso y vuelta'} />
-        <Metric label="Vehículos redirigidos" value={number(metrics.reroutedVehicles)} note={`de ${visibleSession?.vehicles?.length || vehicleCount}`} />
-        <Metric label="Viaje promedio" value={seconds(metrics.averageTravelSeconds)} note={source === 'demo' ? 'Valor ilustrativo' : 'Dato del backend'} />
-        <Metric label="Congestión máxima" value={Number.isFinite(Number(metrics.maxCongestionPct)) ? `${number(metrics.maxCongestionPct, 1)}%` : '—'} note={source === 'demo' ? 'Valor ilustrativo' : 'Dato del backend'} />
+        <Metric label="Vehículos modelados" value={number(metrics.modeledVehicles)} note={`${visibleSession?.vehicles?.length || vehicleCount} autos visuales`} />
+        <Metric label="Costo medio por flujo" value={minutes(metrics.averageTravelMinutes)} note="Costo agregado ÷ 3 flujos" />
+        <Metric label="Saturación máxima" value={Number.isFinite(Number(metrics.maxCongestionPct)) ? `${number(metrics.maxCongestionPct, 1)}%` : '—'} note="edge_loads del backend" />
       </div>
     </div>
   )

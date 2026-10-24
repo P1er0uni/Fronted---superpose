@@ -134,7 +134,7 @@ function App() {
             <p>Los mismos veinte vehículos recorren la misma ciudad con dos estrategias: Dijkstra individual y asignación conjunta con Qiskit.</p>
           </div>
           <div className="lab__disclosure reveal" style={{ '--delay': '80ms' }}>
-            <span>La vista previa compara respuestas mock de NetworkX y Qiskit con la forma del futuro backend.</span>
+            <span>La vista previa reproduce un snapshot de Superpose API; el modo Backend consulta el servidor actual.</span>
             <span>La interfaz no calcula rutas.</span>
           </div>
           <div className="reveal" style={{ '--delay': '140ms' }}>
@@ -154,7 +154,7 @@ function App() {
               </div>
             </article>
             <article className="method__step reveal">
-              <p><strong>Después, el optimizador busca una combinación.</strong> El backend previsto usará Qiskit para orquestar la resolución cuántica o híbrida y distribuir alternativas compatibles entre sí.</p>
+              <p><strong>Después, el optimizador busca una combinación.</strong> Superpose API usa Qiskit para resolver la asignación QAOA y devuelve alternativas compatibles entre sí.</p>
               <div className="route-bands" data-ui aria-label="Tres rutas distribuidas">
                 <i /><i /><i />
               </div>

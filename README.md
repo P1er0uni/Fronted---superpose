@@ -13,11 +13,11 @@ Vite mostrará la URL local, normalmente `http://localhost:5173`.
 
 ## Conectar el simulador
 
-El laboratorio incluye una vista previa jugable con respuestas mock y un modo conectado. Ninguno calcula rutas en el navegador. Para usar el backend, copia `.env.example` como `.env.local`, configura `VITE_SIMULATION_API_URL` y sigue el contrato descrito en [`BACKEND_API.md`](./BACKEND_API.md).
+El laboratorio incluye una vista previa jugable basada en un snapshot del backend y un modo conectado. Ninguno calcula rutas en el navegador. Para usar Superpose API, copia `.env.example` como `.env.local`, configura `VITE_SIMULATION_API_URL` y sigue la integración descrita en [`BACKEND_API.md`](./BACKEND_API.md).
 
-El backend previsto usará Qiskit para formular y ejecutar el proceso de optimización cuántica o híbrida. Durante esta etapa, la demo local reproduce respuestas predefinidas con la misma forma que tendrá la API, sin presentarlas como resultados reales del algoritmo.
+El modo conectado consume directamente `POST /api/v1/events/reset`, `POST /api/v1/route/optimize` y `POST /api/v1/events/report`. La demo local reproduce un snapshot de la topología, las rutas y la telemetría documentadas por el backend, sin ejecutar el algoritmo en el navegador.
 
-La vista previa actual incluye tres flujos origen-destino, tres incidentes con respuestas diferentes y una prueba A/B interactiva. El modo tradicional simula Dijkstra con NetworkX; el modo Qflow simula la asignación conjunta QUBO con Qiskit. El mapa conserva los seis nodos y las ocho vías del backend y solo cambia su proyección visual para que se lea como una red urbana.
+La vista previa incluye tres flujos origen-destino, tres incidentes y una prueba A/B interactiva. El modo tradicional muestra `selfish_route` de NetworkX/Dijkstra; Qflow muestra `qaoa_route` y `quantum_telemetry`. El mapa proyecta las coordenadas de Lima incluidas por el backend y conserva exactamente sus seis nodos y ocho vías.
 
 ## Producción
 

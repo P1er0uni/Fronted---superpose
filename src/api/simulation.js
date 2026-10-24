@@ -1,3 +1,6 @@
+export { API_BASE, reportIncident, startSimulation } from './superposeApi.js'
+
+/* Legacy visual-session contract retained for repository history.
 const API_BASE = (import.meta.env.VITE_SIMULATION_API_URL || '/api').replace(/\/$/, '')
 
 async function request(path, options = {}) {
@@ -43,3 +46,4 @@ export function reportIncident(sessionId, { roadId, type, simulationTimeMs }) {
 }
 
 export { API_BASE }
+*/

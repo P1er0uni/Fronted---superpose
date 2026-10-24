@@ -293,14 +293,15 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
 .traffic-road__edge,
 .traffic-road,
 .traffic-road__lane { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; transition: stroke .18s ease, stroke-width .18s ease; }
-.traffic-road__edge { stroke: #081117; stroke-width: 30; opacity: 1; }
-.traffic-road__edge--primary { stroke-width: 34; }
-.traffic-road { stroke: #44535d; stroke-width: 22; opacity: 1; }
-.traffic-road--primary { stroke: #566a76; stroke-width: 26; }
+.traffic-road__edge { stroke: #081117; stroke-width: var(--road-edge-width, 28px); opacity: 1; }
+.traffic-road { stroke: #45545e; stroke-width: var(--road-width, 20px); opacity: 1; }
+.traffic-road--primary { stroke: #586c78; }
+.traffic-road--local { stroke: #3b4851; }
 .traffic-road__lane { stroke: #e5ebee; stroke-width: 1.6; stroke-dasharray: 10 9; opacity: .82; }
 .traffic-road__lane--primary { stroke-width: 1.8; stroke-dasharray: 13 9; }
 .traffic-road--selected { stroke: #6f828d; }
 .traffic-road--incident { stroke: #7a4037; stroke-dasharray: 18 9; }
+.traffic-road--busy { stroke: #77603d; }
 .traffic-road__hit { fill: none; stroke: transparent; stroke-width: 38; cursor: pointer; outline: none; }
 .traffic-road__hit--disabled { cursor: default; }
 .traffic-map__roads g:has(.traffic-road__hit:hover) .traffic-road,
@@ -308,8 +309,8 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
 .traffic-map__routes { pointer-events: none; }
 .traffic-route__casing,
 .traffic-route__line { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.traffic-route__casing { stroke: #071017; stroke-width: 14; opacity: .48; }
-.traffic-route__line { stroke: var(--route-color); stroke-width: 9; stroke-dasharray: var(--route-dash); stroke-dashoffset: var(--route-offset); opacity: .88; }
+.traffic-route__casing { stroke: #071017; stroke-width: 11; opacity: .4; }
+.traffic-route__line { stroke: var(--route-color); stroke-width: 7; stroke-dasharray: var(--route-dash); stroke-dashoffset: var(--route-offset); opacity: .82; }
 .traffic-route__badge rect { fill: #071017; stroke: var(--route-color); stroke-width: 2; }
 .traffic-route__badge text { fill: #f5f6f1; font-size: 11px; font-weight: 700; }
 .traffic-map__labels { pointer-events: none; }
@@ -327,7 +328,10 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
 .traffic-node--destination circle { fill: #eef4f6; stroke: #111b21; stroke-width: 4; }
 .traffic-node__id { fill: #f5f8f9; font-size: 14px; font-weight: 800; }
 .traffic-node--destination .traffic-node__id { fill: #111b21; }
-.traffic-node__role { fill: #e7eef1; font-size: 11px; font-weight: 600; paint-order: stroke; stroke: #14202a; stroke-width: 5px; stroke-linejoin: round; }
+.traffic-node__district { fill: #e7eef1; font-size: 12px; font-weight: 600; paint-order: stroke; stroke: #14202a; stroke-width: 5px; stroke-linejoin: round; }
+.traffic-map__compass text, .traffic-map__scale text { fill: #b7c5cd; font-size: 12px; font-weight: 600; }
+.traffic-map__compass path { fill: #b7c5cd; }
+.traffic-map__scale path { fill: none; stroke: #b7c5cd; stroke-width: 1.5; }
 .traffic-incident circle { fill: var(--lab-alert); stroke: #fff; stroke-width: 4; }
 .traffic-incident path { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; }
 .traffic-vehicle__halo { fill: #071017; stroke: #f5f6f1; stroke-width: 1.25; opacity: .88; transition: fill .16s ease, stroke-width .16s ease, r .16s ease; }
