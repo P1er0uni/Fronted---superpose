@@ -348,11 +348,12 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
 .traffic-vehicle-group:focus .traffic-vehicle__halo,
 .traffic-vehicle-group--selected .traffic-vehicle__halo { fill: #f5f6f1; stroke: var(--lab-accent); stroke-width: 3; opacity: 1; }
 
-.traffic-map__summary { position: absolute; left: 1rem; bottom: 1rem; max-width: min(460px, 55%); background: #121a28e8; border: 1px solid #3a4a62; border-radius: 10px; padding: .7rem .9rem; color: #e9eef5; font-size: .9rem; line-height: 1.45; }
+.traffic-map__footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: .75rem; padding: 0 1rem 1rem; }
+.traffic-map__summary { flex: 1 1 280px; max-width: 520px; background: #121a28e8; border: 1px solid #3a4a62; border-radius: 10px; padding: .7rem .9rem; color: #e9eef5; font-size: .9rem; line-height: 1.45; }
 .traffic-map__summary strong { font-weight: 700; }
 .traffic-map__summary em { color: #5be7ef; font-style: normal; }
 .traffic-map__summary span { display: block; color: #aab6c6; }
-.traffic-map__key { position: absolute; right: 1rem; bottom: 1rem; display: grid; gap: .2rem; background: #121a28e8; border: 1px solid #3a4a62; border-radius: 10px; padding: .6rem .8rem; color: #cdd6e2; font-size: .74rem; }
+.traffic-map__key { display: grid; gap: .2rem; background: #121a28e8; border: 1px solid #3a4a62; border-radius: 10px; padding: .6rem .8rem; color: #cdd6e2; font-size: .74rem; }
 .traffic-map__key span { display: flex; align-items: center; gap: .45rem; }
 .traffic-map__key b { font-weight: 500; }
 .traffic-map__key i { display: inline-block; width: 18px; border-radius: 2px; }
@@ -543,8 +544,6 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
   .strategy-switch button { min-height: 72px; }
   .strategy-test__decision { grid-column: auto; }
   .traffic-lab__stage { min-height: auto; }
-  .traffic-map__key { display: none; }
-  .traffic-map__summary { position: static; max-width: none; border-radius: 0; border-width: 1px 0 0; }
   .incident-panel { grid-template-columns: 1fr; }
   .incident-panel > div:first-child { grid-column: auto; }
   .solver-preview > div, .strategy-comparison__heading { align-items: flex-start; flex-direction: column; gap: .25rem; }

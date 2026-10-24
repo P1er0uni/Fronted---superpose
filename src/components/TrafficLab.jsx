@@ -370,21 +370,23 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, selecte
         </g>
       </svg>
 
-      {userRoute && (
-        <div className="traffic-map__summary">
-          <strong>{coordinated ? 'Ruta QAOA' : 'Ruta Dijkstra'}:</strong>{' '}
-          {shortPath(userRoute.nodePath)} · <em>{minutes(userMinutes)}</em>
-          {coordinated && otherMinutes > userMinutes ? ' · evita la congestión' : ''}
-          {otherPath && (
-            <span>({coordinated ? 'ruta individual' : 'ruta QAOA'} {shortPath(otherPath)} · {minutes(otherMinutes)})</span>
-          )}
+      <div className="traffic-map__footer">
+        {userRoute && (
+          <div className="traffic-map__summary">
+            <strong>{coordinated ? 'Ruta QAOA' : 'Ruta Dijkstra'}:</strong>{' '}
+            {shortPath(userRoute.nodePath)} · <em>{minutes(userMinutes)}</em>
+            {coordinated && otherMinutes > userMinutes ? ' · evita la congestión' : ''}
+            {otherPath && (
+              <span>({coordinated ? 'ruta individual' : 'ruta QAOA'} {shortPath(otherPath)} · {minutes(otherMinutes)})</span>
+            )}
+          </div>
+        )}
+        <div className="traffic-map__key" aria-hidden="true">
+          <span><i className="key-expressway" /><b>cian</b> = vía expresa (3 carriles)</span>
+          <span><i className="key-avenue" /><b>violeta</b> = avenida (2 carriles)</span>
+          <span><i className="key-local" /><b>delgada</b> = un carril</span>
+          <span><i className="key-route" /><b>discontinua</b> = ruta asignada</span>
         </div>
-      )}
-      <div className="traffic-map__key" aria-hidden="true">
-        <span><i className="key-expressway" /><b>cian</b> = vía expresa (3 carriles)</span>
-        <span><i className="key-avenue" /><b>violeta</b> = avenida (2 carriles)</span>
-        <span><i className="key-local" /><b>delgada</b> = un carril</span>
-        <span><i className="key-route" /><b>discontinua</b> = ruta asignada</span>
       </div>
     </div>
   )
