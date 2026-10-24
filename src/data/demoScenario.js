@@ -57,7 +57,7 @@ const roads = [
   { id: 'anillo-centro', geometry: [[350, 210], [410, 170], [500, 168], [565, 215], [575, 285], [530, 334], [445, 342], [375, 300], [350, 210]], closed: true },
 ]
 
-const map = {
+export const DEMO_MAP = {
   width: 1000,
   height: 620,
   nodes,
@@ -115,7 +115,7 @@ export function createDemoSession(vehicleCount = 20) {
     sessionId: 'demo-qflow',
     revision: 1,
     source: 'demo',
-    map,
+    map: DEMO_MAP,
     routes: buildRoutes('initial'),
     vehicles,
     metrics: {

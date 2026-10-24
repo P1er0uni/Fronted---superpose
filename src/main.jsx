@@ -134,7 +134,7 @@ function App() {
             <p>Veinte vehículos, una red compartida y una decisión inesperada. El mapa anima la respuesta que recibe del motor conectado.</p>
           </div>
           <div className="lab__disclosure reveal" style={{ '--delay': '80ms' }}>
-            <span>La demo usa recorridos predefinidos; el modo conectado recibe las rutas del backend.</span>
+            <span>La vista previa reproduce respuestas mock con la forma del futuro backend Qiskit.</span>
             <span>La interfaz no calcula rutas.</span>
           </div>
           <div className="reveal" style={{ '--delay': '140ms' }}>

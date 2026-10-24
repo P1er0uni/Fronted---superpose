@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { API_BASE, reportIncident, startSimulation } from '../api/simulation'
-import { applyDemoIncident, createDemoSession } from '../data/demoScenario'
+import { applyMockIncident, createMockSession, MOCK_INCIDENTS } from '../data/mockBackend'
 
 const INCIDENTS = [
   { value: 'accident', label: 'Accidente' },
@@ -67,7 +67,7 @@ function pathFromPoints(points = [], closed = false) {
   return `${points.map(([x, y], index) => `${index ? 'L' : 'M'}${x} ${y}`).join(' ')}${closed ? ' Z' : ''}`
 }
 
-function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, incident }) {
+function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, incident, selectedVehicleId, onSelectVehicle, roadsInteractive = true }) {
   const map = session?.map
   const vehicles = session?.vehicles || []
   const width = map?.width || 1000
@@ -113,14 +113,14 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
               <g key={road.id}>
                 <path className={`traffic-road traffic-road--${road.kind || 'secondary'}${isSelected ? ' traffic-road--selected' : ''}${isIncident ? ' traffic-road--incident' : ''}`} d={pathFromPoints(points, road.closed)} />
                 <path
-                  className="traffic-road__hit"
+                  className={`traffic-road__hit${roadsInteractive ? '' : ' traffic-road__hit--disabled'}`}
                   d={pathFromPoints(points, road.closed)}
-                  tabIndex="0"
-                  role="button"
+                  tabIndex={roadsInteractive ? 0 : undefined}
+                  role={roadsInteractive ? 'button' : undefined}
                   aria-label={`Seleccionar vía ${road.label || road.id}`}
-                  onClick={() => onSelectRoad(road.id)}
+                  onClick={() => roadsInteractive && onSelectRoad(road.id)}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') onSelectRoad(road.id)
+                    if (roadsInteractive && (event.key === 'Enter' || event.key === ' ')) onSelectRoad(road.id)
                   }}
                 />
               </g>
@@ -164,7 +164,18 @@ function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, inciden
             const position = pointAt(vehicle.timeline, elapsedMs)
             if (!position) return null
             return (
-              <g key={vehicle.id} transform={`translate(${position.x} ${position.y}) rotate(${(position.angle || 0) + 90})`}>
+              <g
+                key={vehicle.id}
+                className={`traffic-vehicle-group${vehicle.id === selectedVehicleId ? ' traffic-vehicle-group--selected' : ''}`}
+                transform={`translate(${position.x} ${position.y}) rotate(${(position.angle || 0) + 90})`}
+                tabIndex="0"
+                role="button"
+                aria-label={`Inspeccionar ${vehicle.id}`}
+                onClick={() => onSelectVehicle(vehicle.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') onSelectVehicle(vehicle.id)
+                }}
+              >
                 <circle className="traffic-vehicle__halo" r="11" />
                 <path className="traffic-vehicle" d="M0-9 7 8 0 5-7 8Z" style={{ '--vehicle-color': vehicle.color || `var(--vehicle-${(index % 4) + 1})` }} />
               </g>
@@ -195,8 +206,10 @@ export default function TrafficLab() {
   const [source, setSource] = useState('demo')
   const [vehicleCount, setVehicleCount] = useState(20)
   const [incidentType, setIncidentType] = useState('accident')
-  const [selectedRoad, setSelectedRoad] = useState('')
-  const [session, setSession] = useState(() => createDemoSession(20))
+  const [demoIncidentId, setDemoIncidentId] = useState(MOCK_INCIDENTS[0].id)
+  const [selectedRoad, setSelectedRoad] = useState(MOCK_INCIDENTS[0].roadId)
+  const [selectedVehicleId, setSelectedVehicleId] = useState('')
+  const [session, setSession] = useState(() => createMockSession(20))
   const [status, setStatus] = useState('idle')
   const [error, setError] = useState('')
   const [elapsedMs, setElapsedMs] = useState(0)
@@ -235,12 +248,14 @@ export default function TrafficLab() {
 
     try {
       const result = source === 'demo'
-        ? { data: createDemoSession(vehicleCount), latencyMs: null }
+        ? { data: createMockSession(vehicleCount), latencyMs: null }
         : await startSimulation({ vehicleCount, strategy: 'coordinated' })
       if (!result.data?.sessionId || !result.data?.map || !Array.isArray(result.data?.vehicles)) {
         throw new Error('La respuesta no cumple el contrato de simulación.')
       }
       setSession(result.data)
+      setSelectedRoad(source === 'demo' ? MOCK_INCIDENTS.find((item) => item.id === demoIncidentId).roadId : '')
+      setSelectedVehicleId('')
       setApiLatencyMs(result.latencyMs)
       clockRef.current = { origin: performance.now(), pausedAt: 0 }
       setStatus('running')
@@ -256,9 +271,16 @@ export default function TrafficLab() {
     setError('')
     setElapsedMs(0)
     setIncident(null)
-    setSelectedRoad('')
+    setSelectedRoad(nextSource === 'demo' ? MOCK_INCIDENTS.find((item) => item.id === demoIncidentId).roadId : '')
+    setSelectedVehicleId('')
     setApiLatencyMs(null)
-    setSession(nextSource === 'demo' ? createDemoSession(vehicleCount) : null)
+    setSession(nextSource === 'demo' ? createMockSession(vehicleCount) : null)
+  }
+
+  function handleDemoIncidentChange(nextScenarioId) {
+    const scenario = MOCK_INCIDENTS.find((item) => item.id === nextScenarioId)
+    setDemoIncidentId(nextScenarioId)
+    setSelectedRoad(scenario.roadId)
   }
 
   function togglePause() {
@@ -279,14 +301,19 @@ export default function TrafficLab() {
     setError('')
 
     try {
-      const incidentPayload = { roadId: selectedRoad, type: incidentType, simulationTimeMs: incidentAt }
+      const scenario = MOCK_INCIDENTS.find((item) => item.id === demoIncidentId)
+      const incidentPayload = source === 'demo'
+        ? { scenarioId: scenario.id, roadId: scenario.roadId, type: scenario.type, simulationTimeMs: incidentAt }
+        : { roadId: selectedRoad, type: incidentType, simulationTimeMs: incidentAt }
+      if (source === 'demo') await new Promise((resolve) => setTimeout(resolve, 650))
       const result = source === 'demo'
-        ? { data: applyDemoIncident(session, incidentPayload), latencyMs: null }
+        ? { data: applyMockIncident(session, incidentPayload), latencyMs: null }
         : await reportIncident(session.sessionId, incidentPayload)
       if (!Array.isArray(result.data?.vehicles)) {
         throw new Error('El backend no devolvió las nuevas trayectorias.')
       }
       setSession((current) => ({ ...current, ...result.data }))
+      setSelectedVehicleId('')
       setApiLatencyMs(result.latencyMs)
       setIncident({ roadId: selectedRoad, type: incidentType, atMs: incidentAt })
       clockRef.current.origin = performance.now() - incidentAt
@@ -298,6 +325,9 @@ export default function TrafficLab() {
   }
 
   const metrics = session?.metrics || {}
+  const solver = session?.solver
+  const comparison = session?.comparison
+  const selectedVehicle = session?.vehicles?.find((vehicle) => vehicle.id === selectedVehicleId)
   const progress = durationMs ? Math.min(100, (elapsedMs / durationMs) * 100) : 0
 
   return (
@@ -307,13 +337,13 @@ export default function TrafficLab() {
           <span className={`connection-dot connection-dot--${status}`} />
           <div>
             <strong>{STATUS_LABELS[status]}</strong>
-            <span>{source === 'demo' ? 'Escenario local · rutas predefinidas' : API_BASE}</span>
+            <span>{source === 'demo' ? 'Respuesta mock · contrato del backend' : API_BASE}</span>
           </div>
         </div>
 
         <div className="traffic-lab__controls">
           <div className="source-switch" aria-label="Fuente de las rutas">
-            <button type="button" className={source === 'demo' ? 'source-switch--active' : ''} onClick={() => handleSourceChange('demo')}>Demo guiada</button>
+            <button type="button" className={source === 'demo' ? 'source-switch--active' : ''} onClick={() => handleSourceChange('demo')}>Vista previa</button>
             <button type="button" className={source === 'backend' ? 'source-switch--active' : ''} onClick={() => handleSourceChange('backend')}>Backend</button>
           </div>
           <label>
@@ -341,26 +371,52 @@ export default function TrafficLab() {
       )}
 
       <div className="traffic-lab__stage" data-ui>
-        <SimulationMap session={session} elapsedMs={elapsedMs} selectedRoad={selectedRoad} onSelectRoad={setSelectedRoad} incident={incident} />
+        <SimulationMap
+          session={session}
+          elapsedMs={elapsedMs}
+          selectedRoad={selectedRoad}
+          onSelectRoad={setSelectedRoad}
+          incident={incident}
+          selectedVehicleId={selectedVehicleId}
+          onSelectVehicle={setSelectedVehicleId}
+          roadsInteractive={source === 'backend'}
+        />
         <aside className="incident-panel">
           <div>
             <strong>Provocar un cambio</strong>
-            <p>{source === 'demo' ? 'Selecciona una vía y reproduce una respuesta predefinida.' : 'Selecciona una vía y envía el incidente al backend.'}</p>
+            <p>{source === 'demo' ? 'Elige una respuesta mock del futuro backend Qiskit.' : 'Selecciona una vía y envía el incidente al backend.'}</p>
           </div>
-          <label>
-            <span>Tipo de incidente</span>
-            <select value={incidentType} onChange={(event) => setIncidentType(event.target.value)}>
-              {INCIDENTS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-            </select>
-          </label>
+          {source === 'demo' ? (
+            <label>
+              <span>Escenario</span>
+              <select value={demoIncidentId} onChange={(event) => handleDemoIncidentChange(event.target.value)}>
+                {MOCK_INCIDENTS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              </select>
+            </label>
+          ) : (
+            <label>
+              <span>Tipo de incidente</span>
+              <select value={incidentType} onChange={(event) => setIncidentType(event.target.value)}>
+                {INCIDENTS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+              </select>
+            </label>
+          )}
           <div className="incident-panel__road">
             <span>Vía seleccionada</span>
-            <strong>{selectedRoad || 'Haz clic en el mapa'}</strong>
+            <strong>{source === 'demo' ? MOCK_INCIDENTS.find((item) => item.id === demoIncidentId).roadLabel : (selectedRoad || 'Haz clic en el mapa')}</strong>
           </div>
           <button type="button" onClick={handleIncident} disabled={!session || !selectedRoad || !['running', 'paused'].includes(status)}>
             Aplicar incidente
           </button>
           {incident && <small>Último evento aplicado en {seconds(incident.atMs / 1000)}.</small>}
+          {selectedVehicle ? (
+            <div className="vehicle-inspector">
+              <span>{selectedVehicle.id} · {selectedVehicle.rerouted ? 'Redirigido' : 'Ruta mantenida'}</span>
+              <strong>{selectedVehicle.flowLabel}</strong>
+              <p>{selectedVehicle.explanation}</p>
+              <small>Ruta {selectedVehicle.routeId} · ETA {seconds(selectedVehicle.estimatedTravelSeconds)}</small>
+            </div>
+          ) : <small>Selecciona un auto en el mapa para explicar su asignación.</small>}
         </aside>
       </div>
 
@@ -368,9 +424,35 @@ export default function TrafficLab() {
         <i style={{ width: `${progress}%` }} />
       </div>
 
+      {solver && comparison && (
+        <div className="traffic-lab__evidence" data-ui>
+          <div className="solver-preview">
+            <div>
+              <strong>Flujo Qiskit simulado</strong>
+              <span>{solver.mode} · {number(solver.problem.binaryVariables)} variables · {number(solver.problem.constraints)} restricciones</span>
+            </div>
+            <ol>
+              {solver.stages.map((stage) => <li key={stage.id}><span>{stage.label}</span><strong className="num">{number(stage.durationMs, 1)} ms</strong></li>)}
+            </ol>
+          </div>
+          <div className="strategy-comparison">
+            <div className="strategy-comparison__heading">
+              <strong>Individual vs. coordinada</strong>
+              <span>Valores demostrativos</span>
+            </div>
+            <div className="strategy-comparison__table">
+              <span /> <span>Individual</span><span>Qflow</span>
+              <strong>Viaje promedio</strong><span className="num">{seconds(comparison.individual.averageTravelSeconds)}</span><span className="num">{seconds(comparison.coordinated.averageTravelSeconds)}</span>
+              <strong>Congestión máxima</strong><span className="num">{number(comparison.individual.maxCongestionPct)}%</span><span className="num">{number(comparison.coordinated.maxCongestionPct)}%</span>
+              <strong>Último en llegar</strong><span className="num">{seconds(comparison.individual.lastArrivalSeconds)}</span><span className="num">{seconds(comparison.coordinated.lastArrivalSeconds)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="traffic-lab__metrics" data-ui>
         <Metric label="Tiempo simulado" value={seconds(elapsedMs / 1000)} note="Reloj de la sesión" />
-        <Metric label="Cálculo del backend" value={source === 'demo' ? 'No aplica' : (Number.isFinite(Number(metrics.computeMs)) ? `${number(metrics.computeMs, 1)} ms` : '—')} note={source === 'demo' ? 'Sin algoritmo en esta demo' : 'Informado por el servidor'} />
+        <Metric label="Cálculo del backend" value={Number.isFinite(Number(metrics.computeMs)) ? `${number(metrics.computeMs, 1)} ms` : '—'} note={source === 'demo' ? 'Tiempo mock de Qiskit' : 'Informado por el servidor'} />
         <Metric label="Latencia API" value={apiLatencyMs === null ? '—' : `${number(apiLatencyMs, 1)} ms`} note={source === 'demo' ? 'Sin consulta en modo demo' : 'Ida, proceso y vuelta'} />
         <Metric label="Vehículos redirigidos" value={number(metrics.reroutedVehicles)} note={`de ${session?.vehicles?.length || vehicleCount}`} />
         <Metric label="Viaje promedio" value={seconds(metrics.averageTravelSeconds)} note={source === 'demo' ? 'Valor ilustrativo' : 'Dato del backend'} />

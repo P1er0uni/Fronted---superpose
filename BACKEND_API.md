@@ -73,11 +73,28 @@ Respuesta:
     "reroutedVehicles": 0,
     "averageTravelSeconds": 19.4,
     "maxCongestionPct": 61.2
+  },
+  "solver": {
+    "framework": "Qiskit",
+    "execution": "quantum_simulator",
+    "mode": "QUBO híbrido",
+    "problem": {
+      "binaryVariables": 60,
+      "constraints": 26,
+      "candidateRoutes": 60
+    },
+    "stages": [
+      { "id": "encode", "label": "Formular QUBO", "durationMs": 8.4 },
+      { "id": "solve", "label": "Resolver", "durationMs": 29.1 },
+      { "id": "decode", "label": "Decodificar", "durationMs": 5.2 }
+    ]
   }
 }
 ```
 
-Las coordenadas de nodos, calles, rutas y trayectorias usan el mismo sistema definido por `map.width` y `map.height`. Los tiempos de cada `timeline` son absolutos dentro de la sesión y deben llegar ordenados. `roads.geometry` permite representar una vía curva; si se omite, la interfaz dibuja una línea entre `from` y `to`. `routes` es opcional y sirve para mostrar los corredores asignados detrás de los vehículos.
+Las coordenadas de nodos, calles, rutas y trayectorias usan el mismo sistema definido por `map.width` y `map.height`. Los tiempos de cada `timeline` son absolutos dentro de la sesión y deben llegar ordenados. `roads.geometry` permite representar una vía curva; si se omite, la interfaz dibuja una línea entre `from` y `to`. `routes` es opcional y sirve para mostrar los corredores asignados detrás de los vehículos. `solver` permite explicar la ejecución de Qiskit sin mezclar sus etapas con la latencia HTTP.
+
+Cada vehículo puede incluir `flowLabel`, `routeId`, `rerouted`, `estimatedTravelSeconds` y `explanation`. La interfaz los usa para explicar por qué recibió esa asignación. También puede incluirse `comparison.individual` y `comparison.coordinated`, con `averageTravelSeconds`, `maxCongestionPct` y `lastArrivalSeconds`, para contrastar ambas estrategias.
 
 ## Reportar un incidente
 

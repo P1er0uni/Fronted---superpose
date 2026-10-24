@@ -261,6 +261,7 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
 .traffic-road--selected { stroke: #b7d4e8; stroke-width: 13; }
 .traffic-road--incident { stroke: var(--lab-alert); stroke-dasharray: 16 10; }
 .traffic-road__hit { fill: none; stroke: transparent; stroke-width: 24; cursor: pointer; outline: none; }
+.traffic-road__hit--disabled { cursor: default; }
 .traffic-map__roads g:has(.traffic-road__hit:hover) .traffic-road,
 .traffic-map__roads g:has(.traffic-road__hit:focus) .traffic-road { stroke: #9cb9cd; }
 .traffic-map__routes path { fill: none; stroke: var(--route-color); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; opacity: .72; pointer-events: none; }
@@ -278,6 +279,9 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
 .traffic-incident path { fill: none; stroke: #fff; stroke-width: 4; stroke-linecap: round; }
 .traffic-vehicle__halo { fill: #071017; opacity: .72; }
 .traffic-vehicle { fill: var(--vehicle-color); stroke: #f5f6f1; stroke-width: 2; stroke-linejoin: round; }
+.traffic-vehicle-group { cursor: pointer; outline: none; }
+.traffic-vehicle-group:focus .traffic-vehicle__halo,
+.traffic-vehicle-group--selected .traffic-vehicle__halo { fill: #fff; opacity: .9; }
 .traffic-map__key { position: absolute; left: 1rem; bottom: 1rem; display: flex; gap: 1rem; background: #101210e6; padding: .6rem .75rem; color: var(--lab-muted); font-size: .72rem; }
 .traffic-map__key span { display: flex; align-items: center; gap: .35rem; }
 .traffic-map__key i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
@@ -293,8 +297,29 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
 .incident-panel__road strong { font-weight: 500; word-break: break-word; }
 .incident-panel > button { border: 0; border-radius: 6px; background: var(--lab-alert); color: #1b100d; padding: .7rem; margin-top: auto; }
 .incident-panel > small { line-height: 1.4; }
+.vehicle-inspector { display: grid; gap: .4rem; padding-top: 1rem; border-top: 1px solid var(--lab-rule); /* taste-skill-ignore: data-ui detail divider */ }
+.vehicle-inspector > span, .vehicle-inspector small { color: var(--lab-muted); font-size: .72rem; }
+.vehicle-inspector strong { font-size: .85rem; font-weight: 500; line-height: 1.35; }
+.vehicle-inspector p { margin: 0; }
 .traffic-lab__progress { height: 5px; background: var(--lab-raised); }
 .traffic-lab__progress i { height: 100%; display: block; background: var(--lab-accent); transition: width .1s linear; }
+.traffic-lab__evidence { display: grid; grid-template-columns: 1fr 1fr; background: #111511; border-bottom: 1px solid var(--lab-rule); /* taste-skill-ignore: data-ui evidence divider */ }
+.solver-preview, .strategy-comparison { padding: 1.1rem 1.25rem; }
+.solver-preview { border-right: 1px solid var(--lab-rule); /* taste-skill-ignore: data-ui evidence divider */ }
+.solver-preview > div, .strategy-comparison__heading { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.solver-preview > div strong, .strategy-comparison__heading strong { font-size: .9rem; font-weight: 500; }
+.solver-preview > div span, .strategy-comparison__heading span { color: var(--lab-muted); font-size: .72rem; text-align: right; }
+.solver-preview ol { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; padding: 0; margin: 1rem 0 0; list-style: none; }
+.solver-preview li { display: grid; gap: .25rem; padding: .65rem; background: var(--lab-raised); }
+.solver-preview li span { color: var(--lab-muted); font-size: .72rem; }
+.solver-preview li strong { font-size: .82rem; font-weight: 500; }
+.strategy-comparison__table { display: grid; grid-template-columns: 1.25fr .75fr .75fr; align-items: center; margin-top: .7rem; }
+.strategy-comparison__table > * { padding: .38rem 0; font-size: .72rem; }
+.strategy-comparison__table > :nth-child(3n+2),
+.strategy-comparison__table > :nth-child(3n+3) { text-align: right; }
+.strategy-comparison__table > span { color: var(--lab-muted); }
+.strategy-comparison__table > strong { font-weight: 400; }
+.strategy-comparison__table > :nth-child(3n+3) { color: var(--lab-accent); }
 .traffic-lab__metrics { display: grid; grid-template-columns: repeat(6, 1fr); background: var(--lab-surface); }
 .lab-metric { min-height: 118px; padding: 1rem; display: flex; flex-direction: column; border-right: 1px solid var(--lab-rule); /* taste-skill-ignore: data-ui metric divider */ }
 .lab-metric:last-child { border: 0; }
@@ -407,6 +432,8 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
   .incident-panel { border-left: 0; border-top: 1px solid var(--lab-rule); /* taste-skill-ignore: data-ui responsive divider */ display: grid; grid-template-columns: 1fr 1fr; }
   .incident-panel > div:first-child { grid-column: 1 / -1; }
   .incident-panel > button { margin-top: 0; }
+  .traffic-lab__evidence { grid-template-columns: 1fr; }
+  .solver-preview { border-right: 0; border-bottom: 1px solid var(--lab-rule); /* taste-skill-ignore: data-ui responsive divider */ }
   .traffic-lab__metrics { grid-template-columns: repeat(3, 1fr); }
   .lab-metric:nth-child(3) { border-right: 0; }
   .lab-metric:nth-child(-n+3) { border-bottom: 1px solid var(--lab-rule); /* taste-skill-ignore: data-ui metric divider */ }
@@ -438,6 +465,9 @@ h2 { font-size: var(--step-head); font-weight: 400; line-height: .98; letter-spa
   .traffic-map__key { right: 1rem; justify-content: space-between; }
   .incident-panel { grid-template-columns: 1fr; }
   .incident-panel > div:first-child { grid-column: auto; }
+  .solver-preview > div, .strategy-comparison__heading { align-items: flex-start; flex-direction: column; gap: .25rem; }
+  .solver-preview > div span, .strategy-comparison__heading span { text-align: left; }
+  .solver-preview ol { grid-template-columns: 1fr; }
   .traffic-lab__metrics { grid-template-columns: repeat(2, 1fr); }
   .lab-metric:nth-child(3) { border-right: 1px solid var(--lab-rule); /* taste-skill-ignore: data-ui metric divider */ }
   .lab-metric:nth-child(2n) { border-right: 0; }
