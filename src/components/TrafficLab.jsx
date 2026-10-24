@@ -1,0 +1,381 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { API_BASE, reportIncident, startSimulation } from '../api/simulation'
+import { applyDemoIncident, createDemoSession } from '../data/demoScenario'
+
+const INCIDENTS = [
+  { value: 'accident', label: 'Accidente' },
+  { value: 'closure', label: 'Vía cerrada' },
+  { value: 'roadworks', label: 'Obras' },
+  { value: 'demand_spike', label: 'Alta demanda' },
+]
+
+const STATUS_LABELS = {
+  idle: 'Esperando inicio',
+  connecting: 'Consultando backend',
+  running: 'Simulación activa',
+  paused: 'Simulación pausada',
+  recalculating: 'Recalculando rutas',
+  error: 'Sin conexión',
+  complete: 'Recorrido completado',
+}
+
+function number(value, digits = 0) {
+  return Number.isFinite(Number(value))
+    ? new Intl.NumberFormat('es-PE', { maximumFractionDigits: digits }).format(Number(value))
+    : '—'
+}
+
+function seconds(value) {
+  if (!Number.isFinite(Number(value))) return '—'
+  const total = Number(value)
+  if (total < 60) return `${number(total, 1)} s`
+  return `${Math.floor(total / 60)} min ${Math.round(total % 60)} s`
+}
+
+function pointAt(timeline = [], elapsedMs = 0) {
+  if (!timeline.length) return null
+  if (elapsedMs <= timeline[0].atMs) return timeline[0]
+
+  for (let index = 1; index < timeline.length; index += 1) {
+    const next = timeline[index]
+    const previous = timeline[index - 1]
+    if (elapsedMs <= next.atMs) {
+      const span = Math.max(1, next.atMs - previous.atMs)
+      const ratio = Math.min(1, Math.max(0, (elapsedMs - previous.atMs) / span))
+      return {
+        x: previous.x + (next.x - previous.x) * ratio,
+        y: previous.y + (next.y - previous.y) * ratio,
+        angle: Math.atan2(next.y - previous.y, next.x - previous.x) * (180 / Math.PI),
+      }
+    }
+  }
+
+  const last = timeline[timeline.length - 1]
+  const previous = timeline[timeline.length - 2] || last
+  return { ...last, angle: Math.atan2(last.y - previous.y, last.x - previous.x) * (180 / Math.PI) }
+}
+
+function pointsForRoad(road, nodes) {
+  if (road.geometry?.length) return road.geometry
+  const from = nodes.get(road.from)
+  const to = nodes.get(road.to)
+  return from && to ? [[from.x, from.y], [to.x, to.y]] : []
+}
+
+function pathFromPoints(points = [], closed = false) {
+  if (!points.length) return ''
+  return `${points.map(([x, y], index) => `${index ? 'L' : 'M'}${x} ${y}`).join(' ')}${closed ? ' Z' : ''}`
+}
+
+function SimulationMap({ session, elapsedMs, selectedRoad, onSelectRoad, incident }) {
+  const map = session?.map
+  const vehicles = session?.vehicles || []
+  const width = map?.width || 1000
+  const height = map?.height || 560
+
+  if (!map?.nodes?.length || !map?.roads?.length) {
+    return (
+      <div className="traffic-map traffic-map--empty">
+        <div>
+          <strong>El mapa llegará desde el backend</strong>
+          <p>Inicia una sesión para recibir calles, rutas y posiciones de los vehículos.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const nodes = new Map(map.nodes.map((node) => [node.id, node]))
+  const selectedGeometry = pointsForRoad(map.roads.find((road) => road.id === selectedRoad) || {}, nodes)
+  const selectedMidpoint = selectedGeometry[Math.floor(selectedGeometry.length / 2)]
+
+  return (
+    <div className="traffic-map">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Mapa de la simulación de tráfico">
+        <defs>
+          <pattern id="city-blocks" width="42" height="42" patternUnits="userSpaceOnUse">
+            <rect width="42" height="42" fill="#17222c" />
+            <path d="M0 42H42M42 0V42" stroke="#243745" strokeWidth="1" />
+          </pattern>
+        </defs>
+        <rect width={width} height={height} fill="url(#city-blocks)" />
+
+        <g className="traffic-map__areas">
+          {(map.areas || []).map((area) => <path key={area.id} className={`city-area city-area--${area.kind}`} d={pathFromPoints(area.points, true)} />)}
+        </g>
+
+        <g className="traffic-map__roads">
+          {map.roads.map((road) => {
+            const points = pointsForRoad(road, nodes)
+            if (!points.length) return null
+            const isSelected = road.id === selectedRoad
+            const isIncident = road.id === incident?.roadId
+            return (
+              <g key={road.id}>
+                <path className={`traffic-road traffic-road--${road.kind || 'secondary'}${isSelected ? ' traffic-road--selected' : ''}${isIncident ? ' traffic-road--incident' : ''}`} d={pathFromPoints(points, road.closed)} />
+                <path
+                  className="traffic-road__hit"
+                  d={pathFromPoints(points, road.closed)}
+                  tabIndex="0"
+                  role="button"
+                  aria-label={`Seleccionar vía ${road.label || road.id}`}
+                  onClick={() => onSelectRoad(road.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') onSelectRoad(road.id)
+                  }}
+                />
+              </g>
+            )
+          })}
+        </g>
+
+        <g className="traffic-map__routes">
+          {(session.routes || []).map((route) => (
+            <path key={route.id} d={pathFromPoints(route.points)} style={{ '--route-color': route.color }} />
+          ))}
+        </g>
+
+        <g className="traffic-map__labels" aria-hidden="true">
+          {(map.labels || []).map((label) => <text key={`${label.text}-${label.x}`} className={`city-label city-label--${label.kind}`} x={label.x} y={label.y}>{label.text}</text>)}
+          {(map.badges || []).map((badge) => (
+            <g key={badge.text} transform={`translate(${badge.x} ${badge.y})`}>
+              <rect x="-19" y="-15" width="38" height="30" rx="7" />
+              <text textAnchor="middle" dominantBaseline="central">{badge.text}</text>
+            </g>
+          ))}
+        </g>
+
+        <g className="traffic-map__nodes">
+          {map.nodes.map((node) => (
+            node.kind === 'origin' || node.kind === 'destination'
+              ? <circle key={node.id} cx={node.x} cy={node.y} r="11" className={`traffic-node traffic-node--${node.kind}`} />
+              : null
+          ))}
+        </g>
+
+        {selectedMidpoint && incident && (
+          <g className="traffic-incident" transform={`translate(${selectedMidpoint[0]} ${selectedMidpoint[1]})`}>
+            <circle r="17" />
+            <path d="M-6-6 6 6M6-6-6 6" />
+          </g>
+        )}
+
+        <g className="traffic-map__vehicles">
+          {vehicles.map((vehicle, index) => {
+            const position = pointAt(vehicle.timeline, elapsedMs)
+            if (!position) return null
+            return (
+              <g key={vehicle.id} transform={`translate(${position.x} ${position.y}) rotate(${(position.angle || 0) + 90})`}>
+                <circle className="traffic-vehicle__halo" r="11" />
+                <path className="traffic-vehicle" d="M0-9 7 8 0 5-7 8Z" style={{ '--vehicle-color': vehicle.color || `var(--vehicle-${(index % 4) + 1})` }} />
+              </g>
+            )
+          })}
+        </g>
+      </svg>
+      <div className="traffic-map__key" aria-hidden="true">
+        <span><i className="key-origin" />Origen</span>
+        <span><i className="key-destination" />Destino</span>
+        <span><i className="key-vehicle" />Vehículo</span>
+      </div>
+    </div>
+  )
+}
+
+function Metric({ label, value, note }) {
+  return (
+    <div className="lab-metric">
+      <span>{label}</span>
+      <strong className="num">{value}</strong>
+      {note && <small>{note}</small>}
+    </div>
+  )
+}
+
+export default function TrafficLab() {
+  const [source, setSource] = useState('demo')
+  const [vehicleCount, setVehicleCount] = useState(20)
+  const [incidentType, setIncidentType] = useState('accident')
+  const [selectedRoad, setSelectedRoad] = useState('')
+  const [session, setSession] = useState(() => createDemoSession(20))
+  const [status, setStatus] = useState('idle')
+  const [error, setError] = useState('')
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const [apiLatencyMs, setApiLatencyMs] = useState(null)
+  const [incident, setIncident] = useState(null)
+  const clockRef = useRef({ origin: 0, pausedAt: 0 })
+
+  const durationMs = useMemo(() => {
+    const ends = (session?.vehicles || []).map((vehicle) => vehicle.timeline?.at(-1)?.atMs || 0)
+    return Math.max(0, ...ends)
+  }, [session])
+
+  useEffect(() => {
+    if (status !== 'running') return undefined
+    let frame
+    const update = () => {
+      const next = performance.now() - clockRef.current.origin
+      setElapsedMs(next)
+      if (durationMs && next >= durationMs) {
+        setElapsedMs(durationMs)
+        setStatus('complete')
+        return
+      }
+      frame = requestAnimationFrame(update)
+    }
+    frame = requestAnimationFrame(update)
+    return () => cancelAnimationFrame(frame)
+  }, [status, durationMs])
+
+  async function handleStart() {
+    setStatus('connecting')
+    setError('')
+    setIncident(null)
+    setSelectedRoad('')
+    setElapsedMs(0)
+
+    try {
+      const result = source === 'demo'
+        ? { data: createDemoSession(vehicleCount), latencyMs: null }
+        : await startSimulation({ vehicleCount, strategy: 'coordinated' })
+      if (!result.data?.sessionId || !result.data?.map || !Array.isArray(result.data?.vehicles)) {
+        throw new Error('La respuesta no cumple el contrato de simulación.')
+      }
+      setSession(result.data)
+      setApiLatencyMs(result.latencyMs)
+      clockRef.current = { origin: performance.now(), pausedAt: 0 }
+      setStatus('running')
+    } catch (requestError) {
+      setStatus('error')
+      setError(requestError.message)
+    }
+  }
+
+  function handleSourceChange(nextSource) {
+    setSource(nextSource)
+    setStatus('idle')
+    setError('')
+    setElapsedMs(0)
+    setIncident(null)
+    setSelectedRoad('')
+    setApiLatencyMs(null)
+    setSession(nextSource === 'demo' ? createDemoSession(vehicleCount) : null)
+  }
+
+  function togglePause() {
+    if (status === 'running') {
+      clockRef.current.pausedAt = elapsedMs
+      setStatus('paused')
+    } else if (status === 'paused') {
+      clockRef.current.origin = performance.now() - clockRef.current.pausedAt
+      setStatus('running')
+    }
+  }
+
+  async function handleIncident() {
+    if (!session?.sessionId || !selectedRoad) return
+    const wasRunning = status === 'running'
+    const incidentAt = elapsedMs
+    setStatus('recalculating')
+    setError('')
+
+    try {
+      const incidentPayload = { roadId: selectedRoad, type: incidentType, simulationTimeMs: incidentAt }
+      const result = source === 'demo'
+        ? { data: applyDemoIncident(session, incidentPayload), latencyMs: null }
+        : await reportIncident(session.sessionId, incidentPayload)
+      if (!Array.isArray(result.data?.vehicles)) {
+        throw new Error('El backend no devolvió las nuevas trayectorias.')
+      }
+      setSession((current) => ({ ...current, ...result.data }))
+      setApiLatencyMs(result.latencyMs)
+      setIncident({ roadId: selectedRoad, type: incidentType, atMs: incidentAt })
+      clockRef.current.origin = performance.now() - incidentAt
+      setStatus(wasRunning ? 'running' : 'paused')
+    } catch (requestError) {
+      setStatus(wasRunning ? 'running' : 'paused')
+      setError(requestError.message)
+    }
+  }
+
+  const metrics = session?.metrics || {}
+  const progress = durationMs ? Math.min(100, (elapsedMs / durationMs) * 100) : 0
+
+  return (
+    <div className="traffic-lab">
+      <div className="traffic-lab__toolbar" data-ui>
+        <div className="traffic-lab__state">
+          <span className={`connection-dot connection-dot--${status}`} />
+          <div>
+            <strong>{STATUS_LABELS[status]}</strong>
+            <span>{source === 'demo' ? 'Escenario local · rutas predefinidas' : API_BASE}</span>
+          </div>
+        </div>
+
+        <div className="traffic-lab__controls">
+          <div className="source-switch" aria-label="Fuente de las rutas">
+            <button type="button" className={source === 'demo' ? 'source-switch--active' : ''} onClick={() => handleSourceChange('demo')}>Demo guiada</button>
+            <button type="button" className={source === 'backend' ? 'source-switch--active' : ''} onClick={() => handleSourceChange('backend')}>Backend</button>
+          </div>
+          <label>
+            <span>Vehículos</span>
+            <select value={vehicleCount} onChange={(event) => setVehicleCount(Number(event.target.value))} disabled={status === 'connecting' || status === 'recalculating'}>
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </select>
+          </label>
+          <button className="lab-control lab-control--primary" type="button" onClick={handleStart} disabled={status === 'connecting' || status === 'recalculating'}>
+            {session ? 'Reiniciar' : 'Iniciar simulación'}
+          </button>
+          <button className="lab-control" type="button" onClick={togglePause} disabled={!['running', 'paused'].includes(status)}>
+            {status === 'paused' ? 'Continuar' : 'Pausar'}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="traffic-lab__error" role="alert">
+          <span>{error}</span>
+          <button type="button" onClick={handleStart}>Reintentar</button>
+        </div>
+      )}
+
+      <div className="traffic-lab__stage" data-ui>
+        <SimulationMap session={session} elapsedMs={elapsedMs} selectedRoad={selectedRoad} onSelectRoad={setSelectedRoad} incident={incident} />
+        <aside className="incident-panel">
+          <div>
+            <strong>Provocar un cambio</strong>
+            <p>{source === 'demo' ? 'Selecciona una vía y reproduce una respuesta predefinida.' : 'Selecciona una vía y envía el incidente al backend.'}</p>
+          </div>
+          <label>
+            <span>Tipo de incidente</span>
+            <select value={incidentType} onChange={(event) => setIncidentType(event.target.value)}>
+              {INCIDENTS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+            </select>
+          </label>
+          <div className="incident-panel__road">
+            <span>Vía seleccionada</span>
+            <strong>{selectedRoad || 'Haz clic en el mapa'}</strong>
+          </div>
+          <button type="button" onClick={handleIncident} disabled={!session || !selectedRoad || !['running', 'paused'].includes(status)}>
+            Aplicar incidente
+          </button>
+          {incident && <small>Último evento aplicado en {seconds(incident.atMs / 1000)}.</small>}
+        </aside>
+      </div>
+
+      <div className="traffic-lab__progress" aria-label={`Progreso ${Math.round(progress)}%`}>
+        <i style={{ width: `${progress}%` }} />
+      </div>
+
+      <div className="traffic-lab__metrics" data-ui>
+        <Metric label="Tiempo simulado" value={seconds(elapsedMs / 1000)} note="Reloj de la sesión" />
+        <Metric label="Cálculo del backend" value={source === 'demo' ? 'No aplica' : (Number.isFinite(Number(metrics.computeMs)) ? `${number(metrics.computeMs, 1)} ms` : '—')} note={source === 'demo' ? 'Sin algoritmo en esta demo' : 'Informado por el servidor'} />
+        <Metric label="Latencia API" value={apiLatencyMs === null ? '—' : `${number(apiLatencyMs, 1)} ms`} note={source === 'demo' ? 'Sin consulta en modo demo' : 'Ida, proceso y vuelta'} />
+        <Metric label="Vehículos redirigidos" value={number(metrics.reroutedVehicles)} note={`de ${session?.vehicles?.length || vehicleCount}`} />
+        <Metric label="Viaje promedio" value={seconds(metrics.averageTravelSeconds)} note={source === 'demo' ? 'Valor ilustrativo' : 'Dato del backend'} />
+        <Metric label="Congestión máxima" value={Number.isFinite(Number(metrics.maxCongestionPct)) ? `${number(metrics.maxCongestionPct, 1)}%` : '—'} note={source === 'demo' ? 'Valor ilustrativo' : 'Dato del backend'} />
+      </div>
+    </div>
+  )
+}
