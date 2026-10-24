@@ -131,10 +131,10 @@ function App() {
         <section className="lab" id="laboratorio" aria-labelledby="lab-title">
           <div className="lab__heading reveal">
             <h2 id="lab-title">Laboratorio en vivo</h2>
-            <p>Veinte vehículos, una red compartida y una decisión inesperada. El mapa anima la respuesta que recibe del motor conectado.</p>
+            <p>Los mismos veinte vehículos recorren la misma ciudad con dos estrategias: Dijkstra individual y asignación conjunta con Qiskit.</p>
           </div>
           <div className="lab__disclosure reveal" style={{ '--delay': '80ms' }}>
-            <span>La vista previa reproduce respuestas mock con la forma del futuro backend Qiskit.</span>
+            <span>La vista previa compara respuestas mock de NetworkX y Qiskit con la forma del futuro backend.</span>
             <span>La interfaz no calcula rutas.</span>
           </div>
           <div className="reveal" style={{ '--delay': '140ms' }}>

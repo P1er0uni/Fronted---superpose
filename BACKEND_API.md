@@ -29,9 +29,15 @@ Correspondencia prevista:
 | Métricas del solver | `quantum_telemetry` y `total_time_ms` | Separar tiempo QAOA de latencia HTTP. |
 | Autos animados | `flows[].vehicles` | Expandir visualmente cada flujo sobre su ruta; el navegador solo anima. |
 
-La vista previa actual replica la topología exacta de `app/config.py`: `NODO_A` a `NODO_F` y sus 8 aristas configuradas, con sus tiempos base y capacidades. Como el backend no entrega coordenadas geográficas, el frontend asigna únicamente la posición y curvatura visual de cada arista. No inventa calles, nodos ni rotondas; una ruta solo puede recorrer conexiones presentes en esa configuración.
+La vista previa actual replica la topología exacta de `app/config.py`: `NODO_A` a `NODO_F` y sus 8 aristas configuradas, con sus tiempos base y capacidades. Como el backend no entrega coordenadas geográficas, el frontend proyecta esas conexiones como corredores urbanos ortogonales y dos conectores diagonales. No inventa calles, nodos ni rotondas; una ruta solo puede recorrer conexiones presentes en esa configuración. En el mapa, únicamente los nodos circulares A–F representan cruces habilitados.
 
 La diferencia conceptual importante es que `superpose-api` optimiza exactamente **3 flujos con 2 rutas candidatas cada uno**, lo que produce un QUBO de 6 variables/qubits. Los 20 autos de la demostración no deben presentarse como 20 decisiones cuánticas independientes: son la representación visual de vehículos agrupados dentro de esos flujos. Esta escala es adecuada para la primera demo y mantiene visible el aporte cuántico sin inflar el problema.
+
+## Prueba A/B de la vista previa
+
+La demo contiene dos respuestas precalculadas para el mismo escenario. “Tradicional” representa las rutas egoístas obtenidas por Dijkstra para cada flujo; “Qflow · Qiskit” representa la asignación conjunta. El selector no ejecuta ninguno de los algoritmos en el navegador: intercambia rutas, trayectorias, etapas y métricas mock con el mismo contrato visual.
+
+El caso inicial destaca una decisión concreta. Para el flujo A → E, la estrategia tradicional usa A → C → E, mientras Qflow usa A → B → E para no concentrar ambos flujos de A sobre A → C. Los números de cálculo, viaje y congestión son ilustrativos y deben reemplazarse por `selfish_route`, `qaoa_route`, `comparison` y `quantum_telemetry` cuando se conecte `superpose-api`.
 
 El solver actual usa QAOA sobre `qiskit-aer` y puede recurrir a `NumPyMinimumEigensolver`. Para afirmar que la ejecución ocurrió en hardware de IBM será necesario añadir una configuración de IBM Quantum Runtime y devolver el proveedor real en la telemetría. Mientras tanto, la interfaz debe rotular la ejecución como simulada.
 
@@ -123,7 +129,7 @@ Respuesta:
 
 Las coordenadas de nodos, calles, rutas y trayectorias usan el mismo sistema definido por `map.width` y `map.height`. Los tiempos de cada `timeline` son absolutos dentro de la sesión y deben llegar ordenados. `roads.geometry` permite representar una vía curva; si se omite, la interfaz dibuja una línea entre `from` y `to`. `routes` es opcional y sirve para mostrar los corredores asignados detrás de los vehículos. `solver` permite explicar la ejecución de Qiskit sin mezclar sus etapas con la latencia HTTP.
 
-Cada vehículo puede incluir `flowLabel`, `routeId`, `rerouted`, `estimatedTravelSeconds` y `explanation`. La interfaz los usa para explicar por qué recibió esa asignación. También puede incluirse `comparison.individual` y `comparison.coordinated`, con `averageTravelSeconds`, `maxCongestionPct` y `lastArrivalSeconds`, para contrastar ambas estrategias.
+Cada vehículo puede incluir `flowLabel`, `routeId`, `rerouted`, `estimatedTravelSeconds` y `explanation`. La interfaz los usa para explicar por qué recibió esa asignación. También puede incluirse `comparison.individual` y `comparison.coordinated`, con `computeMs`, `averageTravelSeconds`, `maxCongestionPct` y `lastArrivalSeconds`, para contrastar ambas estrategias. Para solicitar el cálculo clásico se enviará `strategy: "individual"`; para la asignación Qiskit, `strategy: "coordinated"`.
 
 ## Reportar un incidente
 

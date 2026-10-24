@@ -17,7 +17,7 @@ El laboratorio incluye una vista previa jugable con respuestas mock y un modo co
 
 El backend previsto usará Qiskit para formular y ejecutar el proceso de optimización cuántica o híbrida. Durante esta etapa, la demo local reproduce respuestas predefinidas con la misma forma que tendrá la API, sin presentarlas como resultados reales del algoritmo.
 
-La vista previa actual incluye tres flujos origen-destino, tres incidentes con respuestas diferentes, una traza simulada del proceso QUBO y una comparación ilustrativa entre ruteo individual y asignación coordinada.
+La vista previa actual incluye tres flujos origen-destino, tres incidentes con respuestas diferentes y una prueba A/B interactiva. El modo tradicional simula Dijkstra con NetworkX; el modo Qflow simula la asignación conjunta QUBO con Qiskit. El mapa conserva los seis nodos y las ocho vías del backend y solo cambia su proyección visual para que se lea como una red urbana.
 
 ## Producción
 
